@@ -29,17 +29,23 @@ async def manual_crop(request: Request, body: CropRequest) -> ProcessResponse:
         return ProcessResponse(success=False, error="文件不存在或已过期，请重新上传")
 
     try:
-        image = cv2.imread(str(image_path))
-        if image is None:
+        loop = asyncio.get_event_loop()
+
+        def _read_and_crop():
+            img = cv2.imread(str(image_path))
+            if img is None:
+                return None, None
+            h_img, w_img = img.shape[:2]
+            x = max(0, min(body.x, w_img - 1))
+            y = max(0, min(body.y, h_img - 1))
+            w = min(body.width, w_img - x)
+            h = min(body.height, h_img - y)
+            crop = img[y:y + h, x:x + w].copy()
+            return crop, (w, h)
+
+        crop, (w, h) = await loop.run_in_executor(None, _read_and_crop)
+        if crop is None:
             return ProcessResponse(success=False, error="图片读取失败")
-
-        h_img, w_img = image.shape[:2]
-        x = max(0, min(body.x, w_img - 1))
-        y = max(0, min(body.y, h_img - 1))
-        w = min(body.width, w_img - x)
-        h = min(body.height, h_img - y)
-
-        crop = image[y:y + h, x:x + w].copy()
 
         pipeline = get_pipeline()
         result = await asyncio.get_event_loop().run_in_executor(

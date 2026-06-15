@@ -10,7 +10,10 @@ QR reconstruction into a single end-to-end flow.
 from __future__ import annotations
 
 import logging
-from pathlib import Path
+import os
+import threading
+from collections import OrderedDict
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import cv2
 import numpy as np
@@ -23,6 +26,8 @@ from qrflow.utils.image import encode_base64
 
 logger = logging.getLogger(__name__)
 
+_MAX_CACHE_SIZE = 32
+
 
 class Pipeline:
     """End-to-end QR code reconstruction pipeline."""
@@ -30,74 +35,123 @@ class Pipeline:
     def __init__(self) -> None:
         self._steps = get_steps()
         self._backends = get_available_backends()
+        self._cache: OrderedDict[str, dict] = OrderedDict()
+        self._cache_lock = threading.Lock()
+        self._processing_locks: dict[str, threading.Lock] = {}
+        self._processing_locks_lock = threading.Lock()
+        self._executor = ThreadPoolExecutor(max_workers=max(6, len(self._backends)))
+
+    def _get_cache(self, image_path: str) -> dict | None:
+        try:
+            mtime = os.path.getmtime(image_path)
+        except OSError:
+            return None
+        key = f"{image_path}:{mtime}"
+        with self._cache_lock:
+            if key in self._cache:
+                self._cache.move_to_end(key)
+                return self._cache[key]
+        return None
+
+    def _set_cache(self, image_path: str, result: dict) -> None:
+        try:
+            mtime = os.path.getmtime(image_path)
+        except OSError:
+            return
+        key = f"{image_path}:{mtime}"
+        with self._cache_lock:
+            self._cache[key] = result
+            self._cache.move_to_end(key)
+            while len(self._cache) > _MAX_CACHE_SIZE:
+                self._cache.popitem(last=False)
 
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
 
+    def _get_or_create_processing_lock(self, image_path: str) -> threading.Lock:
+        with self._processing_locks_lock:
+            if image_path not in self._processing_locks:
+                self._processing_locks[image_path] = threading.Lock()
+            return self._processing_locks[image_path]
+
     def process(self, image_path: str) -> dict:
-        image: np.ndarray = cv2.imread(image_path)
-        if image is None:
-            raise FileNotFoundError(f"Cannot read image: {image_path}")
+        cached = self._get_cache(image_path)
+        if cached is not None:
+            logger.info("Cache hit: %s", image_path)
+            return cached
 
-        original_base64 = encode_base64(image)
-        qr_regions = self._locate_qr_codes(image)
+        proc_lock = self._get_or_create_processing_lock(image_path)
+        with proc_lock:
+            cached = self._get_cache(image_path)
+            if cached is not None:
+                logger.info("Cache hit (after lock): %s", image_path)
+                return cached
 
-        all_steps: list[dict] = []
-        total_attempts = 0
+            image: np.ndarray = cv2.imread(image_path)
+            if image is None:
+                raise FileNotFoundError(f"Cannot read image: {image_path}")
 
-        if qr_regions:
-            for region_idx, region in enumerate(qr_regions):
-                crop = region["crop_array"]
+            original_base64 = encode_base64(image)
+            qr_regions = self._locate_qr_codes(image)
+
+            all_steps: list[dict] = []
+            total_attempts = 0
+
+            if qr_regions:
+                for region_idx, region in enumerate(qr_regions):
+                    crop = region["crop_array"]
+                    for step in self._steps:
+                        try:
+                            enhanced = step.process(crop)
+                        except Exception as exc:
+                            logger.warning("Enhance step '%s' failed: %s", step.name, exc)
+                            enhanced = crop
+                        b64 = encode_base64(enhanced)
+                        recog = self._recognize(enhanced)
+                        step_name = f"区域{region_idx + 1}·{step.label}"
+                        total_attempts += len(recog.get("all_results", []))
+                        all_steps.append({
+                            "step_key": step.name,
+                            "step_name": step_name,
+                            "image_base64": b64,
+                            "recognition": recog,
+                        })
+                    del region["crop_array"]
+            else:
+                current = image
                 for step in self._steps:
                     try:
-                        enhanced = step.process(crop)
+                        current = step.process(current)
                     except Exception as exc:
                         logger.warning("Enhance step '%s' failed: %s", step.name, exc)
-                        enhanced = crop
-                    b64 = encode_base64(enhanced)
-                    recog = self._recognize(enhanced)
-                    step_name = f"区域{region_idx + 1}·{step.label}"
+                    b64 = encode_base64(current)
+                    recog = self._recognize(current)
                     total_attempts += len(recog.get("all_results", []))
                     all_steps.append({
                         "step_key": step.name,
-                        "step_name": step_name,
+                        "step_name": step.label,
                         "image_base64": b64,
                         "recognition": recog,
                     })
-                del region["crop_array"]
-        else:
-            current = image
-            for step in self._steps:
-                try:
-                    current = step.process(current)
-                except Exception as exc:
-                    logger.warning("Enhance step '%s' failed: %s", step.name, exc)
-                b64 = encode_base64(current)
-                recog = self._recognize(current)
-                total_attempts += len(recog.get("all_results", []))
-                all_steps.append({
-                    "step_key": step.name,
-                    "step_name": step.label,
-                    "image_base64": b64,
-                    "recognition": recog,
-                })
 
-        deduplicated = build_deduplicated_results(all_steps)
+            deduplicated = build_deduplicated_results(all_steps)
 
-        logger.info(
-            "Pipeline complete: %d region(s), %d step(s), %d unique result(s).",
-            len(qr_regions), len(all_steps), len(deduplicated),
-        )
+            logger.info(
+                "Pipeline complete: %d region(s), %d step(s), %d unique result(s).",
+                len(qr_regions), len(all_steps), len(deduplicated),
+            )
 
-        return {
-            "qr_regions": qr_regions,
-            "original_image_base64": original_base64,
-            "steps": all_steps,
-            "deduplicated": deduplicated,
-            "dedup_count": len(deduplicated),
-            "total_attempts": total_attempts,
-        }
+            result = {
+                "qr_regions": qr_regions,
+                "original_image_base64": original_base64,
+                "steps": all_steps,
+                "deduplicated": deduplicated,
+                "dedup_count": len(deduplicated),
+                "total_attempts": total_attempts,
+            }
+            self._set_cache(image_path, result)
+            return result
 
     def detect_regions(self, image_path: str) -> dict:
         image: np.ndarray = cv2.imread(image_path)
@@ -155,21 +209,26 @@ class Pipeline:
         all_results: list[dict] = []
         first_content: str | None = None
         first_scheme: str | None = None
+        backend_names = [b.name for b in self._backends]
 
-        for backend in self._backends:
+        def _run(backend):
             try:
                 content = backend.recognize(image)
             except Exception as exc:
-                all_results.append({"scheme": backend.name, "success": False, "error": str(exc)})
-                continue
-
+                return {"scheme": backend.name, "success": False, "error": str(exc)}
             if content:
-                all_results.append({"scheme": backend.name, "success": True, "content": content})
-                if first_content is None:
-                    first_content = content
-                    first_scheme = backend.name
-            else:
-                all_results.append({"scheme": backend.name, "success": False, "error": "no QR code found"})
+                return {"scheme": backend.name, "success": True, "content": content}
+            return {"scheme": backend.name, "success": False, "error": "no QR code found"}
+
+        futures = {self._executor.submit(_run, b): b for b in self._backends}
+        for future in as_completed(futures):
+            r = future.result()
+            all_results.append(r)
+            if r.get("success") and first_content is None:
+                first_content = r["content"]
+                first_scheme = r["scheme"]
+
+        all_results.sort(key=lambda r: backend_names.index(r["scheme"]) if r["scheme"] in backend_names else 99)
 
         return {
             "success": first_content is not None,
@@ -284,8 +343,7 @@ class Pipeline:
     # Multi-scale scanning
     # ------------------------------------------------------------------
 
-    @staticmethod
-    def _scan_tiles(image: np.ndarray, img_w: int, img_h: int) -> list[dict]:
+    def _scan_tiles(self, image: np.ndarray, img_w: int, img_h: int) -> list[dict]:
         try:
             from pyzbar.pyzbar import decode as _pzd
         except ImportError:
@@ -294,74 +352,79 @@ class Pipeline:
 
         result: list[dict] = []
         seen: set[tuple] = set()
-        detector = cv2.QRCodeDetector()
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY) if len(image.shape) == 3 else image
 
-        for scale in [1, 2, 3, 4, 5, 6]:
+        scales = [1, 2, 3, 4, 5, 6]
+
+        def _scan_at_scale(scale: int) -> list[dict]:
+            local: list[dict] = []
             if scale == 1:
-                scaled, scaled_gray = image, gray
+                s_img, s_gray = image, gray
             else:
-                scaled = cv2.resize(image, None, fx=scale, fy=scale, interpolation=cv2.INTER_CUBIC)
-                scaled_gray = cv2.resize(gray, None, fx=scale, fy=scale, interpolation=cv2.INTER_CUBIC)
+                s_img = cv2.resize(image, None, fx=scale, fy=scale, interpolation=cv2.INTER_CUBIC)
+                s_gray = cv2.resize(gray, None, fx=scale, fy=scale, interpolation=cv2.INTER_CUBIC)
 
             # pyzbar at this scale
             try:
-                for det in _pzd(scaled_gray):
+                for det in _pzd(s_gray):
                     if det.polygon and len(det.polygon) >= 4:
                         pts = np.array([(p.x / scale, p.y / scale) for p in det.polygon], dtype=np.int32)
                         x, y = int(np.min(pts[:, 0])), int(np.min(pts[:, 1]))
                         w, h = int(np.max(pts[:, 0]) - x), int(np.max(pts[:, 1]) - y)
-                        key = (x, y, w, h)
-                        if w > 0 and h > 0 and key not in seen:
-                            seen.add(key)
-                            result.append({"bbox": key, "source": f"pyzbar({scale}x)"})
+                        if w > 0 and h > 0:
+                            local.append({"bbox": (x, y, w, h), "source": f"pyzbar({scale}x)"})
             except Exception:
                 pass
 
             # OpenCV at this scale
             try:
-                ret, pts = detector.detect(scaled)
+                det = cv2.QRCodeDetector()
+                ret, pts = det.detect(s_img)
                 if ret and pts is not None:
                     pts_a = pts if isinstance(pts, np.ndarray) else np.array(pts)
                     x, y = int(np.min(pts_a[:, 0]) / scale), int(np.min(pts_a[:, 1]) / scale)
                     w, h = int((np.max(pts_a[:, 0]) - np.min(pts_a[:, 0])) / scale), int((np.max(pts_a[:, 1]) - np.min(pts_a[:, 1])) / scale)
-                    key = (x, y, w, h)
-                    if w > 5 and h > 5 and key not in seen:
-                        seen.add(key)
-                        result.append({"bbox": key, "source": f"opencv({scale}x)"})
+                    if w > 5 and h > 5:
+                        local.append({"bbox": (x, y, w, h), "source": f"opencv({scale}x)"})
             except Exception:
                 pass
 
             # Sharpened detection for scales >= 5
             if scale >= 5:
-                blur = cv2.GaussianBlur(scaled_gray, (0, 0), 1.5)
-                sharp = cv2.addWeighted(scaled_gray, 2.0, blur, -1.0, 0)
+                blur = cv2.GaussianBlur(s_gray, (0, 0), 1.5)
+                sharp = cv2.addWeighted(s_gray, 2.0, blur, -1.0, 0)
                 try:
                     for det in _pzd(sharp):
                         if det.polygon and len(det.polygon) >= 4:
                             pts = np.array([(p.x / scale, p.y / scale) for p in det.polygon], dtype=np.int32)
                             x, y = int(np.min(pts[:, 0])), int(np.min(pts[:, 1]))
                             w, h = int(np.max(pts[:, 0]) - x), int(np.max(pts[:, 1]) - y)
-                            key = (x, y, w, h)
-                            if w > 0 and h > 0 and key not in seen:
-                                seen.add(key)
-                                result.append({"bbox": key, "source": f"pyzbar({scale}x+sharp)"})
+                            if w > 0 and h > 0:
+                                local.append({"bbox": (x, y, w, h), "source": f"pyzbar({scale}x+sharp)"})
                 except Exception:
                     pass
 
                 try:
                     sharp_bgr = cv2.cvtColor(sharp, cv2.COLOR_GRAY2BGR)
-                    ret, pts = detector.detect(sharp_bgr)
+                    ret, pts = det.detect(sharp_bgr)
                     if ret and pts is not None:
                         pts_a = pts if isinstance(pts, np.ndarray) else np.array(pts)
                         x, y = int(np.min(pts_a[:, 0]) / scale), int(np.min(pts_a[:, 1]) / scale)
                         w, h = int((np.max(pts_a[:, 0]) - np.min(pts_a[:, 0])) / scale), int((np.max(pts_a[:, 1]) - np.min(pts_a[:, 1])) / scale)
-                        key = (x, y, w, h)
-                        if w > 5 and h > 5 and key not in seen:
-                            seen.add(key)
-                            result.append({"bbox": key, "source": f"opencv({scale}x+sharp)"})
+                        if w > 5 and h > 5:
+                            local.append({"bbox": (x, y, w, h), "source": f"opencv({scale}x+sharp)"})
                 except Exception:
                     pass
+
+            return local
+
+        futures = {self._executor.submit(_scan_at_scale, s): s for s in scales}
+        for future in as_completed(futures):
+            for item in future.result():
+                key = item["bbox"]
+                if key not in seen:
+                    seen.add(key)
+                    result.append(item)
 
         if result:
             logger.info("Multi-scale scan found %d QR region(s).", len(result))
