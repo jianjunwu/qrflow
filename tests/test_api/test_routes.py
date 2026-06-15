@@ -111,6 +111,14 @@ class TestCrop:
         })
         assert resp.json()["success"] is False
 
+    def test_crop_zero_dimensions(self, client, uploaded_image):
+        """width 或 height 为 0 时应返回 422（模拟前端过早 cancelCropMode 的 bug）."""
+        resp = client.post("/api/manual_crop", json={
+            "filename": uploaded_image,
+            "x": 0, "y": 0, "width": 0, "height": 0,
+        })
+        assert resp.status_code == 422
+
     def test_crop_valid(self, client, uploaded_image):
         resp = client.post("/api/manual_crop", json={
             "filename": uploaded_image,
@@ -120,3 +128,29 @@ class TestCrop:
         data = resp.json()
         assert data["success"] is True
         assert "steps" in data
+
+    def test_crop_multiple_regions_same_image(self, client, uploaded_image):
+        """多区域框选：对同一图片多次调用 manual_crop 均应成功."""
+        regions = [
+            {"filename": uploaded_image, "x": 0, "y": 0, "width": 50, "height": 50},
+            {"filename": uploaded_image, "x": 50, "y": 50, "width": 80, "height": 80},
+            {"filename": uploaded_image, "x": 100, "y": 100, "width": 60, "height": 60},
+        ]
+        for i, body in enumerate(regions):
+            resp = client.post("/api/manual_crop", json=body)
+            assert resp.status_code == 200, f"region {i} failed with {resp.status_code}"
+            data = resp.json()
+            assert data["success"] is True, f"region {i}: {data}"
+
+    def test_crop_missing_fields(self, client, uploaded_image):
+        """缺少必填字段应返回 422."""
+        resp = client.post("/api/manual_crop", json={"filename": uploaded_image})
+        assert resp.status_code == 422
+
+    def test_crop_negative_coords(self, client, uploaded_image):
+        """负坐标应返回 422."""
+        resp = client.post("/api/manual_crop", json={
+            "filename": uploaded_image,
+            "x": -1, "y": 0, "width": 100, "height": 100,
+        })
+        assert resp.status_code == 422

@@ -48,17 +48,7 @@
             <section class="preview-section hidden" id="previewSection">
                 <div class="preview-wrapper" id="previewWrapper">
                     <img id="previewImage" alt="预览图片" class="preview-image">
-                    <div class="crop-overlay hidden" id="cropOverlay">
-                        <div class="crop-handle nw" data-handle="nw"></div>
-                        <div class="crop-handle n"  data-handle="n"></div>
-                        <div class="crop-handle ne" data-handle="ne"></div>
-                        <div class="crop-handle e"  data-handle="e"></div>
-                        <div class="crop-handle se" data-handle="se"></div>
-                        <div class="crop-handle s"  data-handle="s"></div>
-                        <div class="crop-handle sw" data-handle="sw"></div>
-                        <div class="crop-handle w"  data-handle="w"></div>
-                        <div class="crop-size-label hidden" id="cropSizeLabel"></div>
-                    </div>
+                    <div class="crop-overlays-container" id="cropOverlays"></div>
                 </div>
                 <div class="crop-hint hidden" id="cropHint">
                     未自动检测到QR码，您可以手动框选QR区域后重新处理
@@ -79,7 +69,8 @@
                     <button class="btn btn-secondary hidden" id="btnStartCrop">手动框选QR区域</button>
                     <button class="btn btn-primary" id="btnProcess">开始处理</button>
                     <button class="btn btn-process-all hidden" id="btnProcessAll" title="处理全部已上传的图片">处理全部</button>
-                    <button class="btn btn-primary hidden" id="btnManualProcess">使用框选区域处理</button>
+                    <button class="btn btn-primary hidden" id="btnManualProcess">处理选中区域</button>
+                    <button class="btn btn-success hidden" id="btnConfirmCrop">确认框选</button>
                     <button class="btn btn-secondary hidden" id="btnCancelCrop">取消框选</button>
                 </div>
             </section>
@@ -131,8 +122,7 @@
         const previewSection = document.getElementById('previewSection');
         const previewImage = document.getElementById('previewImage');
         const previewWrapper = document.getElementById('previewWrapper');
-        const cropOverlay = document.getElementById('cropOverlay');
-        const cropSizeLabel = document.getElementById('cropSizeLabel');
+        const cropOverlays = document.getElementById('cropOverlays');
         const cropHint = document.getElementById('cropHint');
         const btnReturnUpload = document.getElementById('btnReturnUpload');
         const btnChangeFile = document.getElementById('btnChangeFile');
@@ -140,6 +130,7 @@
         const btnProcess = document.getElementById('btnProcess');
         const btnProcessAll = document.getElementById('btnProcessAll');
         const btnManualProcess = document.getElementById('btnManualProcess');
+        const btnConfirmCrop = document.getElementById('btnConfirmCrop');
         const btnCancelCrop = document.getElementById('btnCancelCrop');
         const progressInline = document.getElementById('progressInline');
         const progressFill = document.getElementById('progressFill');
@@ -185,9 +176,10 @@
             dragging: false,
             resizing: false,
             resizeHandle: null,
+            selectedIndex: -1,
+            rects: [],
             startX: 0, startY: 0,
             endX: 0, endY: 0,
-            origX: 0, origY: 0, origW: 0, origH: 0,
             dragOffX: 0, dragOffY: 0,
         };
 
@@ -931,9 +923,10 @@
             startCropMode();
         });
         btnCancelCrop.addEventListener('click', cancelCropMode);
+        btnConfirmCrop.addEventListener('click', confirmCrop);
 
         btnManualProcess.addEventListener('click', () => {
-            if (!getActiveFile() || cropState.origW <= 0 || cropState.origH <= 0) return;
+            if (!getActiveFile() || cropState.rects.length === 0) return;
             processManualCrop();
         });
 
@@ -942,16 +935,21 @@
             cropState.drawing = false;
             cropState.dragging = false;
             cropState.resizing = false;
-            cropState.origX = cropState.origY = cropState.origW = cropState.origH = 0;
+            cropState.selectedIndex = -1;
+            cropState.rects = [];
+            cropState.startX = cropState.startY = cropState.endX = cropState.endY = 0;
 
             btnStartCrop.classList.add('hidden');
             btnProcess.classList.add('hidden');
+            btnProcessAll.classList.add('hidden');
             btnManualProcess.classList.add('hidden');
+            btnConfirmCrop.classList.add('hidden');
             btnCancelCrop.classList.remove('hidden');
-            cropOverlay.classList.add('hidden');
-            cropSizeLabel.classList.add('hidden');
+
+            previewImage.classList.add('crop-zoomed');
             previewImage.style.cursor = 'crosshair';
 
+            clearAllCropOverlays();
             previewWrapper.addEventListener('mousedown', onCropMouseDown);
         }
 
@@ -960,19 +958,49 @@
             cropState.drawing = false;
             cropState.dragging = false;
             cropState.resizing = false;
-            cropState.origX = cropState.origY = cropState.origW = cropState.origH = 0;
+            cropState.selectedIndex = -1;
+            cropState.rects = [];
+            cropState.startX = cropState.startY = cropState.endX = cropState.endY = 0;
 
             btnStartCrop.classList.add('hidden');
             btnProcess.classList.remove('hidden');
             btnManualProcess.classList.add('hidden');
+            btnConfirmCrop.classList.add('hidden');
             btnCancelCrop.classList.add('hidden');
             cropHint.classList.add('hidden');
-            cropOverlay.classList.add('hidden');
-            cropSizeLabel.classList.add('hidden');
+
+            previewImage.classList.remove('crop-zoomed');
             previewImage.style.cursor = '';
+
+            clearAllCropOverlays();
             previewWrapper.removeEventListener('mousedown', onCropMouseDown);
             document.removeEventListener('mousemove', onCropMouseMove);
             document.removeEventListener('mouseup', onCropMouseUp);
+            updateUI();
+        }
+
+        function confirmCrop() {
+            if (cropState.rects.length === 0) return;
+
+            cropState.active = false;
+            cropState.drawing = false;
+            cropState.dragging = false;
+            cropState.resizing = false;
+            cropState.selectedIndex = -1;
+
+            previewImage.classList.remove('crop-zoomed');
+            previewImage.style.cursor = '';
+
+            btnConfirmCrop.classList.add('hidden');
+            btnCancelCrop.classList.add('hidden');
+            btnManualProcess.classList.remove('hidden');
+            btnManualProcess.textContent = `处理选中区域 (${cropState.rects.length})`;
+            btnProcess.classList.remove('hidden');
+
+            previewWrapper.removeEventListener('mousedown', onCropMouseDown);
+            document.removeEventListener('mousemove', onCropMouseMove);
+            document.removeEventListener('mouseup', onCropMouseUp);
+            renderAllCropOverlays();
         }
 
         function getCropDisplayRect() {
@@ -983,45 +1011,122 @@
             return { bx, by, bw, bh };
         }
 
-        function syncCropOrig() {
-            const rect = previewImage.getBoundingClientRect();
-            const scaleX = previewImage.naturalWidth / rect.width;
-            const scaleY = previewImage.naturalHeight / rect.height;
-            const { bx, by, bw, bh } = getCropDisplayRect();
+        function syncOrigForRect(rect) {
+            const imgRect = previewImage.getBoundingClientRect();
+            const scaleX = previewImage.naturalWidth / imgRect.width;
+            const scaleY = previewImage.naturalHeight / imgRect.height;
+            const bx = Math.min(rect.startX, rect.endX);
+            const by = Math.min(rect.startY, rect.endY);
+            const bw = Math.abs(rect.endX - rect.startX);
+            const bh = Math.abs(rect.endY - rect.startY);
+            rect.startX = bx;
+            rect.startY = by;
+            rect.endX = bx + bw;
+            rect.endY = by + bh;
+            rect.origX = Math.round(bx * scaleX);
+            rect.origY = Math.round(by * scaleY);
+            rect.origW = Math.round(bw * scaleX);
+            rect.origH = Math.round(bh * scaleY);
+        }
 
-            cropState.startX = bx;
-            cropState.startY = by;
-            cropState.endX = bx + bw;
-            cropState.endY = by + bh;
-            cropState.origX = Math.round(bx * scaleX);
-            cropState.origY = Math.round(by * scaleY);
-            cropState.origW = Math.round(bw * scaleX);
-            cropState.origH = Math.round(bh * scaleY);
+        function clearAllCropOverlays() {
+            cropOverlays.innerHTML = '';
+        }
+
+        function renderAllCropOverlays() {
+            cropOverlays.innerHTML = '';
+            const imgLeft = previewImage.offsetLeft;
+            const imgTop = previewImage.offsetTop;
+
+            // Render confirmed rects
+            cropState.rects.forEach((rect, i) => {
+                const bx = Math.min(rect.startX, rect.endX);
+                const by = Math.min(rect.startY, rect.endY);
+                const bw = Math.abs(rect.endX - rect.startX);
+                const bh = Math.abs(rect.endY - rect.startY);
+                const isSelected = i === cropState.selectedIndex && cropState.active;
+
+                const overlay = document.createElement('div');
+                overlay.className = 'crop-overlay has-handles' + (isSelected ? ' selected' : '');
+                overlay.dataset.rectIndex = i;
+                overlay.style.left = (imgLeft + bx) + 'px';
+                overlay.style.top = (imgTop + by) + 'px';
+                overlay.style.width = bw + 'px';
+                overlay.style.height = bh + 'px';
+
+                if (isSelected) {
+                    ['nw','n','ne','e','se','s','sw','w'].forEach(h => {
+                        const handle = document.createElement('div');
+                        handle.className = 'crop-handle ' + h;
+                        handle.dataset.handle = h;
+                        overlay.appendChild(handle);
+                    });
+                }
+
+                const label = document.createElement('div');
+                label.className = 'crop-size-label';
+                label.textContent = `${rect.origW}×${rect.origH} px`;
+                overlay.appendChild(label);
+
+                const badge = document.createElement('div');
+                badge.className = 'crop-rect-index';
+                badge.textContent = i + 1;
+                overlay.appendChild(badge);
+
+                cropOverlays.appendChild(overlay);
+            });
+
+            // Render drawing overlay
+            if (cropState.drawing) {
+                const bx = Math.min(cropState.startX, cropState.endX);
+                const by = Math.min(cropState.startY, cropState.endY);
+                const bw = Math.abs(cropState.endX - cropState.startX);
+                const bh = Math.abs(cropState.endY - cropState.startY);
+
+                if (bw >= 2 && bh >= 2) {
+                    const overlay = document.createElement('div');
+                    overlay.className = 'crop-overlay';
+                    overlay.style.left = (imgLeft + bx) + 'px';
+                    overlay.style.top = (imgTop + by) + 'px';
+                    overlay.style.width = bw + 'px';
+                    overlay.style.height = bh + 'px';
+                    cropOverlays.appendChild(overlay);
+                }
+            }
         }
 
         function onCropMouseDown(e) {
             if (!cropState.active) return;
 
-            const rect = previewImage.getBoundingClientRect();
-            const mx = e.clientX - rect.left;
-            const my = e.clientY - rect.top;
+            const imgRect = previewImage.getBoundingClientRect();
+            const mx = e.clientX - imgRect.left;
+            const my = e.clientY - imgRect.top;
 
-            // Check if clicking on a handle (only when box exists and not drawing)
-            if (!cropState.drawing && cropState.origW > 0) {
-                const handle = e.target.closest('.crop-handle');
-                if (handle) {
-                    e.preventDefault();
-                    cropState.resizing = true;
-                    cropState.resizeHandle = handle.dataset.handle;
-                    cropState.startX = mx;
-                    cropState.startY = my;
-                    document.addEventListener('mousemove', onCropMouseMove);
-                    document.addEventListener('mouseup', onCropMouseUp);
-                    return;
-                }
+            // Check handle first (resize)
+            const handle = e.target.closest('.crop-handle');
+            if (handle && cropState.selectedIndex >= 0) {
+                e.preventDefault();
+                cropState.resizing = true;
+                cropState.resizeHandle = handle.dataset.handle;
+                document.addEventListener('mousemove', onCropMouseMove);
+                document.addEventListener('mouseup', onCropMouseUp);
+                return;
+            }
 
-                // Check if clicking inside the box to drag
-                const { bx, by, bw, bh } = getCropDisplayRect();
+            // Check if clicking on an existing rect overlay (select or drag)
+            const overlayEl = e.target.closest('.crop-overlay');
+            if (overlayEl && overlayEl.dataset.rectIndex !== undefined) {
+                const idx = parseInt(overlayEl.dataset.rectIndex);
+                cropState.selectedIndex = idx;
+                cropState.drawing = false;
+                renderAllCropOverlays();
+
+                const sel = cropState.rects[idx];
+                const bx = Math.min(sel.startX, sel.endX);
+                const by = Math.min(sel.startY, sel.endY);
+                const bw = Math.abs(sel.endX - sel.startX);
+                const bh = Math.abs(sel.endY - sel.startY);
+
                 if (mx >= bx && mx <= bx + bw && my >= by && my <= by + bh) {
                     e.preventDefault();
                     cropState.dragging = true;
@@ -1029,8 +1134,8 @@
                     cropState.dragOffY = my - by;
                     document.addEventListener('mousemove', onCropMouseMove);
                     document.addEventListener('mouseup', onCropMouseUp);
-                    return;
                 }
+                return;
             }
 
             // Start new draw
@@ -1038,135 +1143,134 @@
             cropState.drawing = true;
             cropState.dragging = false;
             cropState.resizing = false;
-            cropOverlay.classList.remove('has-handles');
-            cropSizeLabel.classList.add('hidden');
-            btnManualProcess.classList.add('hidden');
+            cropState.selectedIndex = -1;
+            renderAllCropOverlays();
 
             cropState.startX = mx;
             cropState.startY = my;
             cropState.endX = mx;
             cropState.endY = my;
 
-            updateCropOverlay();
             document.addEventListener('mousemove', onCropMouseMove);
             document.addEventListener('mouseup', onCropMouseUp);
         }
 
         function onCropMouseMove(e) {
-            const rect = previewImage.getBoundingClientRect();
-            const mx = Math.max(0, Math.min(e.clientX - rect.left, rect.width));
-            const my = Math.max(0, Math.min(e.clientY - rect.top, rect.height));
+            const imgRect = previewImage.getBoundingClientRect();
+            const mx = Math.max(0, Math.min(e.clientX - imgRect.left, imgRect.width));
+            const my = Math.max(0, Math.min(e.clientY - imgRect.top, imgRect.height));
 
             if (cropState.drawing) {
                 cropState.endX = mx;
                 cropState.endY = my;
-                updateCropOverlay();
+                renderAllCropOverlays();
                 return;
             }
 
-            if (cropState.resizing) {
-                const dx = mx - cropState.startX;
-                const dy = my - cropState.startY;
+            if (cropState.resizing && cropState.selectedIndex >= 0) {
+                const sel = cropState.rects[cropState.selectedIndex];
                 const h = cropState.resizeHandle;
+                if (h.includes('e')) sel.endX = mx;
+                if (h.includes('w')) sel.startX = mx;
+                if (h.includes('s')) sel.endY = my;
+                if (h.includes('n')) sel.startY = my;
 
-                let { bx, by, bw, bh } = getCropDisplayRect();
+                if (sel.endX - sel.startX < 10) {
+                    if (h.includes('e')) sel.endX = sel.startX + 10;
+                    else if (h.includes('w')) sel.startX = sel.endX - 10;
+                }
+                if (sel.endY - sel.startY < 10) {
+                    if (h.includes('s')) sel.endY = sel.startY + 10;
+                    else if (h.includes('n')) sel.startY = sel.endY - 10;
+                }
 
-                if (h.includes('e')) { cropState.endX = Math.max(bx + 10, cropState.endX + dx - (cropState.startX - mx)); }
-                if (h.includes('w')) { cropState.startX = Math.min(bx + bw - 10, cropState.startX + dx - (cropState.startX - mx)); }
-                if (h.includes('s')) { cropState.endY = Math.max(by + 10, cropState.endY + dy - (cropState.startY - my)); }
-                if (h.includes('n')) { cropState.startY = Math.min(by + bh - 10, cropState.startY + dy - (cropState.startY - my)); }
+                sel.startX = Math.max(0, sel.startX);
+                sel.startY = Math.max(0, sel.startY);
+                sel.endX = Math.min(imgRect.width, sel.endX);
+                sel.endY = Math.min(imgRect.height, sel.endY);
 
-                cropState.startX = Math.max(0, cropState.startX);
-                cropState.startY = Math.max(0, cropState.startY);
-                cropState.endX = Math.min(rect.width, cropState.endX);
-                cropState.endY = Math.min(rect.height, cropState.endY);
-
-                cropState.startX = mx - (cropState.endX - cropState.startX) / 2; // approximate for resize tracking
-                cropState.startY = my - (cropState.endY - cropState.startY) / 2;
-                cropState.startX = mx;
-                cropState.startY = my;
-                updateCropOverlay();
-                syncCropOrig();
-                updateSizeLabel();
+                syncOrigForRect(sel);
+                renderAllCropOverlays();
                 return;
             }
 
-            if (cropState.dragging) {
-                const { bw, bh } = getCropDisplayRect();
+            if (cropState.dragging && cropState.selectedIndex >= 0) {
+                const sel = cropState.rects[cropState.selectedIndex];
+                const bw = Math.abs(sel.endX - sel.startX);
+                const bh = Math.abs(sel.endY - sel.startY);
                 let newX = mx - cropState.dragOffX;
                 let newY = my - cropState.dragOffY;
-                newX = Math.max(0, Math.min(newX, rect.width - bw));
-                newY = Math.max(0, Math.min(newY, rect.height - bh));
+                newX = Math.max(0, Math.min(newX, imgRect.width - bw));
+                newY = Math.max(0, Math.min(newY, imgRect.height - bh));
 
-                cropState.startX = newX;
-                cropState.startY = newY;
-                cropState.endX = newX + bw;
-                cropState.endY = newY + bh;
-                updateCropOverlay();
-                syncCropOrig();
-                updateSizeLabel();
+                sel.startX = newX;
+                sel.startY = newY;
+                sel.endX = newX + bw;
+                sel.endY = newY + bh;
+
+                syncOrigForRect(sel);
+                renderAllCropOverlays();
                 return;
             }
         }
 
         function onCropMouseUp(e) {
+            document.removeEventListener('mousemove', onCropMouseMove);
+            document.removeEventListener('mouseup', onCropMouseUp);
+
             if (cropState.drawing) {
                 cropState.drawing = false;
-                const { bw, bh } = getCropDisplayRect();
-                syncCropOrig();
-                cropOverlay.classList.add('has-handles');
+                const bw = Math.abs(cropState.endX - cropState.startX);
+                const bh = Math.abs(cropState.endY - cropState.startY);
 
-                if (cropState.origW > 5 && cropState.origH > 5) {
-                    updateSizeLabel();
-                    btnManualProcess.classList.remove('hidden');
+                if (bw > 5 && bh > 5) {
+                    const newRect = {
+                        startX: cropState.startX,
+                        startY: cropState.startY,
+                        endX: cropState.endX,
+                        endY: cropState.endY,
+                        origX: 0, origY: 0, origW: 0, origH: 0,
+                    };
+                    syncOrigForRect(newRect);
+                    if (newRect.origW > 5 && newRect.origH > 5) {
+                        cropState.selectedIndex = cropState.rects.length;
+                        cropState.rects.push(newRect);
+                        btnConfirmCrop.classList.remove('hidden');
+                    }
                 }
+                renderAllCropOverlays();
+                return;
             }
 
             if (cropState.resizing || cropState.dragging) {
                 cropState.resizing = false;
                 cropState.dragging = false;
-                syncCropOrig();
-                updateSizeLabel();
-                if (cropState.origW > 5 && cropState.origH > 5) {
-                    btnManualProcess.classList.remove('hidden');
+                if (cropState.selectedIndex >= 0) {
+                    syncOrigForRect(cropState.rects[cropState.selectedIndex]);
                 }
+                renderAllCropOverlays();
+                return;
             }
-
-            document.removeEventListener('mousemove', onCropMouseMove);
-            document.removeEventListener('mouseup', onCropMouseUp);
-
-            // Re-attach previewWrapper listener
-            previewWrapper.addEventListener('mousedown', onCropMouseDown);
         }
 
-        function updateCropOverlay() {
-            const { bx, by, bw, bh } = getCropDisplayRect();
-            const imgLeft = previewImage.offsetLeft;
-            const imgTop = previewImage.offsetTop;
-
-            cropOverlay.style.left = (imgLeft + bx) + 'px';
-            cropOverlay.style.top = (imgTop + by) + 'px';
-            cropOverlay.style.width = bw + 'px';
-            cropOverlay.style.height = bh + 'px';
-            cropOverlay.classList.toggle('hidden', bw < 2 || bh < 2);
-        }
-
-        function updateSizeLabel() {
-            cropSizeLabel.textContent = `${cropState.origW}×${cropState.origH} px`;
-            cropSizeLabel.classList.remove('hidden');
-
-            const { by } = getCropDisplayRect();
-            const imgTop = previewImage.offsetTop;
-            cropSizeLabel.style.top = (imgTop + by - 24) + 'px';
-            cropSizeLabel.style.left = cropOverlay.style.left;
-        }
-
-        // Keyboard: Esc to delete crop box
+        // Keyboard: Delete/Backspace to remove selected rect, Esc to clear or cancel crop
         document.addEventListener('keydown', (e) => {
-            if ((e.key === 'Escape' || e.key === 'Delete') && cropState.active && cropState.origW > 0) {
-                if (qrLightbox.classList.contains('hidden')) {
+            if (!cropState.active || !qrLightbox.classList.contains('hidden')) return;
+
+            if ((e.key === 'Delete' || e.key === 'Backspace') && cropState.selectedIndex >= 0) {
+                e.preventDefault();
+                cropState.rects.splice(cropState.selectedIndex, 1);
+                cropState.selectedIndex = cropState.rects.length > 0 ? Math.min(cropState.selectedIndex, cropState.rects.length - 1) : -1;
+                if (cropState.rects.length === 0) btnConfirmCrop.classList.add('hidden');
+                renderAllCropOverlays();
+            } else if (e.key === 'Escape') {
+                if (cropState.rects.length > 0) {
+                    cropState.rects = [];
+                    cropState.selectedIndex = -1;
+                    btnConfirmCrop.classList.add('hidden');
+                    renderAllCropOverlays();
+                } else {
                     cancelCropMode();
-                    startCropMode(); // re-enter crop mode
                 }
             }
         });
@@ -1176,50 +1280,76 @@
         // ============================================================
         async function processManualCrop() {
             const activeFile = getActiveFile();
-            if (!activeFile || !activeFile.filename) return;
+            if (!activeFile || !activeFile.filename || cropState.rects.length === 0) return;
+
+            const rects = cropState.rects.map(r => ({ x: r.origX, y: r.origY, width: r.origW, height: r.origH }));
 
             processing = true;
             abortController = new AbortController();
             btnManualProcess.disabled = true;
-            btnCancelCrop.disabled = true;
             btnProcess.classList.add('hidden');
+            btnCancelCrop.classList.add('hidden');
             errorSection.classList.add('hidden');
             resultsSection.classList.add('hidden');
-            cancelCropMode();
+            clearAllCropOverlays();
             cropHint.classList.add('hidden');
             startProgress();
 
             try {
-                const resp = await fetch('/api/manual_crop', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        filename: activeFile.filename,
-                        x: cropState.origX,
-                        y: cropState.origY,
-                        width: cropState.origW,
-                        height: cropState.origH,
-                    }),
-                    signal: abortController.signal,
-                });
-                const data = await resp.json();
+                let allSteps = [];
+                let allRegions = [];
+                let anySuccess = false;
+                let lastError = null;
 
-                if (!data.success) {
+                for (let i = 0; i < rects.length; i++) {
+                    const r = rects[i];
+                    progressText.textContent = `处理框选区域 (${i + 1}/${rects.length})...`;
+                    try {
+                        const resp = await fetch('/api/manual_crop', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                filename: activeFile.filename,
+                                x: r.x, y: r.y, width: r.width, height: r.height,
+                            }),
+                            signal: abortController.signal,
+                        });
+                        const data = await resp.json();
+                        if (data.success) {
+                            anySuccess = true;
+                            if (data.steps) allSteps = allSteps.concat(data.steps);
+                            if (data.qr_regions) allRegions = allRegions.concat(data.qr_regions);
+                            if (data.deduplicated) {
+                                if (!activeFile.results) {
+                                    activeFile.results = data;
+                                } else {
+                                    const existing = activeFile.results.deduplicated || [];
+                                    const merged = new Map();
+                                    existing.forEach(d => merged.set(d.content, d));
+                                    (data.deduplicated || []).forEach(d => { if (!merged.has(d.content)) merged.set(d.content, d); });
+                                    activeFile.results.deduplicated = Array.from(merged.values());
+                                    activeFile.results.dedup_count = activeFile.results.deduplicated.length;
+                                }
+                            }
+                        } else {
+                            lastError = data.error;
+                        }
+                    } catch (err) {
+                        if (err.name === 'AbortError') return;
+                        lastError = err.message;
+                    }
+                }
+
+                if (anySuccess) {
+                    if (allRegions.length > 0) activeFile.regions = allRegions;
+                    activeFile.processed = true;
+                    finishProgress(true);
+                    populateSteps(allSteps);
+                    renderAllResults();
+                } else {
                     finishProgress(false);
-                    showError(data.error || '未能识别到QR码内容');
-                    return;
+                    showError(lastError || '未能识别到QR码内容');
                 }
-
-                if (data.qr_regions && data.qr_regions.length > 0) {
-                    activeFile.regions = data.qr_regions;
-                }
-                activeFile.results = data;
-                activeFile.processed = true;
-
-                finishProgress(true);
-                populateSteps(data.steps || []);
-                renderAllResults();
-
             } catch (err) {
                 if (err.name === 'AbortError') return;
                 finishProgress(false);
@@ -1228,7 +1358,6 @@
                 processing = false;
                 abortController = null;
                 btnManualProcess.disabled = false;
-                btnCancelCrop.disabled = false;
                 btnProcess.classList.remove('hidden');
                 updateUI();
             }

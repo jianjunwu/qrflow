@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
-from qrflow.core.recognize.registry import get_available_backends, list_backends
+import numpy as np
+import pytest
+
+from qrflow.core.recognize.registry import get_available_backends, get_backend, list_backends
 
 
 class TestRecognizeRegistry:
@@ -14,9 +17,50 @@ class TestRecognizeRegistry:
     def test_get_available_backends_returns_list(self):
         backends = get_available_backends()
         assert len(backends) > 0
-        # Priority descending
         priorities = [b.priority for b in backends]
         assert priorities == sorted(priorities, reverse=True)
+
+
+class TestZxingBackend:
+    def test_backend_registered(self):
+        backend = get_backend("zxing")
+        assert backend is not None
+
+    def test_backend_available(self):
+        """zxing-cpp 后端应可用（v3 API 适配后）."""
+        backend = get_backend("zxing")
+        assert backend.available, "zxing-cpp backend should be available"
+
+    def test_recognizes_qr_code(self, qr_image):
+        backend = get_backend("zxing")
+        if not backend.available:
+            pytest.skip("zxing-cpp not available")
+        content = backend.recognize(qr_image)
+        assert content is not None
+        assert "https://example.com/test-qr" in content
+
+    def test_plain_image_returns_none(self, plain_image):
+        backend = get_backend("zxing")
+        if not backend.available:
+            pytest.skip("zxing-cpp not available")
+        content = backend.recognize(plain_image)
+        assert content is None
+
+
+class TestWeChatBackend:
+    def test_backend_registered(self):
+        backend = get_backend("wechat")
+        assert backend is not None
+
+    def test_backend_graceful_degradation(self):
+        """WeChat QR 在 opencv-contrib >= 4.11 中不可用，应优雅降级."""
+        backend = get_backend("wechat")
+        # WeChat QR class was removed from opencv-contrib >= 4.11
+        # Backend should mark itself as unavailable without crashing
+        assert not backend.available
+        # recognize() should return None when unavailable
+        result = backend.recognize(np.ones((100, 100, 3), dtype=np.uint8) * 255)
+        assert result is None
 
 
 class TestRecognition:
