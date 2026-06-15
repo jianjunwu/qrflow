@@ -25,42 +25,29 @@ def copy_zbar() -> None:
         raise FileNotFoundError("libzbar.dylib not found. Install with: brew install zbar")
 
     elif sys.platform == "linux":
-        for candidate in [
+        machine = __import__("platform").machine()
+        candidates = [
+            f"/usr/lib/{machine}-linux-gnu/libzbar.so.0",
             "/usr/lib/x86_64-linux-gnu/libzbar.so.0",
+            "/usr/lib/aarch64-linux-gnu/libzbar.so.0",
             "/usr/lib/libzbar.so.0",
-        ]:
-            src = Path(candidate)
-            if src.exists():
-                shutil.copy2(src, LIBS_DIR / "libzbar.so.0")
-                (LIBS_DIR / "libzbar.so").symlink_to("libzbar.so.0")
-                print(f"Copied {src} -> {LIBS_DIR / 'libzbar.so.0'}")
+        ]
+        for src in candidates:
+            p = Path(src)
+            if p.exists():
+                dest = LIBS_DIR / "libzbar.so.0"
+                shutil.copy2(p, dest)
+                link = LIBS_DIR / "libzbar.so"
+                if not link.exists():
+                    link.symlink_to("libzbar.so.0")
+                print(f"Copied {p} -> {dest}")
                 return
         raise FileNotFoundError(
             "libzbar.so.0 not found. Install with: apt install libzbar0"
         )
 
-    elif sys.platform == "win32":
-        import urllib.request
-        import zipfile
-        import tempfile
-
-        url = (
-            "https://github.com/NaturalHistoryMuseum/zbar-windows"
-            "/releases/download/v0.10/zbar-0.10-windows-x86_64.zip"
-        )
-        with tempfile.TemporaryDirectory() as tmp:
-            zp = Path(tmp) / "zbar.zip"
-            print(f"Downloading {url} ...")
-            urllib.request.urlretrieve(url, zp)
-            with zipfile.ZipFile(zp, "r") as zf:
-                for name in zf.namelist():
-                    if name.lower().endswith(".dll"):
-                        zf.extract(name, tmp)
-                        print(f"Extracted {name}")
-            for dll in Path(tmp).rglob("*.dll"):
-                dest = LIBS_DIR / dll.name
-                shutil.copy2(dll, dest)
-                print(f"Copied {dll.name} -> {dest}")
+    else:
+        raise RuntimeError(f"Unsupported platform: {sys.platform}")
 
 
 if __name__ == "__main__":
