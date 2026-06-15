@@ -23,8 +23,7 @@ logger = logging.getLogger(__name__)
 
 BANNER = f"""=======================================================
   qrflow  v{__version__}
-  作者 · jianjunwu  ·  github.com/jianjunwu/qrflow
-  欢迎技术交流与指导
+  github.com/jianjunwu/qrflow
 ======================================================="""
 
 

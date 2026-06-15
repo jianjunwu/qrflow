@@ -12,7 +12,7 @@ from fastapi.responses import FileResponse
 
 router = APIRouter()
 
-_INDEX_PATH = Path(__file__).resolve().parent.parent.parent.parent.parent / "templates" / "index.html"
+_INDEX_PATH = Path(__file__).resolve().parent.parent.parent / "templates" / "index.html"
 
 
 @router.get("/")

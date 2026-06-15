@@ -2,8 +2,6 @@
    qrflow — Stylesheet
    Copyright (c) 2026 QRFlow Authors
    License: MIT
-
-   Modern, clean design with card-based results layout.
    ========================================================================== */
 
 /* --- Reset & Base -------------------------------------------------------- */
@@ -137,6 +135,13 @@ section h2 {
     color: var(--color-text-secondary);
 }
 
+.paste-hint {
+    font-size: 0.8rem;
+    color: var(--color-text-secondary);
+    opacity: 0.7;
+    margin-top: 0.5rem;
+}
+
 /* --- Preview Area -------------------------------------------------------- */
 .preview-area {
     text-align: center;
@@ -173,17 +178,6 @@ section h2 {
     padding: 0.75rem;
     color: var(--color-text-secondary);
     font-size: 0.9rem;
-}
-
-.btn-start-crop {
-    background: var(--color-warning-bg);
-    color: var(--color-warning);
-    border: 1px solid #fde68a;
-    margin-left: 0.5rem;
-}
-
-.btn-start-crop:hover {
-    background: #fef3c7;
 }
 
 .preview-actions {
@@ -242,102 +236,76 @@ section h2 {
 .btn-copy {
     background: var(--color-primary-light);
     color: var(--color-primary);
+    font-weight: 600;
 }
 
 .btn-copy:hover {
     background: #dde4ff;
 }
 
+.btn-copy.copied {
+    background: var(--color-success-bg);
+    color: var(--color-success);
+}
+
 .btn-download {
     background: var(--color-success-bg);
     color: var(--color-success);
+    font-weight: 600;
 }
 
 .btn-download:hover {
     background: #dcfce7;
 }
 
-/* --- Regions Section ----------------------------------------------------- */
-.regions-section {
-    padding: 1.5rem;
-}
-
-.regions-thumbnails {
-    display: flex;
-    gap: 1rem;
-    flex-wrap: wrap;
-}
-
-.region-thumb {
-    text-align: center;
-    flex-shrink: 0;
-}
-
-.region-thumb img {
-    width: 120px;
-    height: 120px;
-    object-fit: contain;
-    border: 2px solid var(--color-primary);
-    border-radius: var(--radius-sm);
-    background: #fff;
-    box-shadow: var(--shadow-sm);
-}
-
-.region-label {
-    display: block;
-    margin-top: 0.4rem;
-    font-size: 0.8rem;
-    font-weight: 600;
-    color: var(--color-primary);
-}
-
 /* --- Progress Section ---------------------------------------------------- */
-.progress-list {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
+.progress-section {
+    text-align: center;
+    padding: 2rem 1.5rem;
 }
 
-.progress-item {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0.75rem 1rem;
-    border-radius: var(--radius-sm);
+.progress-container {
+    max-width: 400px;
+    margin: 0 auto;
+}
+
+.progress-bar {
+    width: 100%;
+    height: 6px;
+    background: var(--color-border);
+    border-radius: 3px;
+    overflow: hidden;
+    margin-bottom: 1rem;
+}
+
+.progress-fill {
+    height: 100%;
+    width: 0%;
+    border-radius: 3px;
+    background: linear-gradient(90deg, var(--color-primary), #764ba2);
+    transition: width 0.3s ease;
+}
+
+.progress-fill.active {
+    width: 90%;
+    transition: width 8s ease-out;
+}
+
+.progress-fill.done {
+    width: 100%;
+    background: var(--color-success);
+    transition: width 0.4s ease;
+}
+
+.progress-fill.error {
+    width: 100%;
+    background: var(--color-error);
+    transition: width 0.4s ease;
+}
+
+.progress-text {
     font-size: 0.95rem;
-    border: 1px solid var(--color-border);
-    transition: all var(--transition);
-}
-
-.progress-item.pending {
-    background: #f8fafc;
     color: var(--color-text-secondary);
-}
-
-.progress-item.success {
-    background: var(--color-success-bg);
-    border-color: #bbf7d0;
-    color: var(--color-success);
-}
-
-.progress-item.failed {
-    background: var(--color-warning-bg);
-    border-color: #fde68a;
-    color: var(--color-warning);
-}
-
-.progress-item.error {
-    background: var(--color-error-bg);
-    border-color: #fecaca;
-    color: var(--color-error);
-}
-
-.progress-step-name {
-    font-weight: 500;
-}
-
-.progress-status {
-    font-size: 0.85rem;
 }
 
 /* --- Error Section ------------------------------------------------------- */
@@ -373,6 +341,10 @@ section h2 {
     margin-bottom: 0.5rem;
 }
 
+.no-results .btn {
+    margin-top: 1rem;
+}
+
 /* --- Result Card --------------------------------------------------------- */
 .result-card {
     background: var(--color-surface);
@@ -402,31 +374,54 @@ section h2 {
     font-size: 0.95rem;
 }
 
-.card-sources {
+.card-status {
     font-size: 0.8rem;
-    color: var(--color-text-secondary);
+    font-weight: 600;
+    padding: 0.2rem 0.6rem;
+    border-radius: 999px;
+}
+
+.card-status.success {
+    background: var(--color-success-bg);
+    color: var(--color-success);
 }
 
 .card-body {
     display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 1.5rem 1rem 1rem;
     gap: 1rem;
-    padding: 1rem;
-    align-items: flex-start;
-    flex-wrap: wrap;
 }
 
-.card-image {
+/* --- Hero QR ------------------------------------------------------------- */
+.card-hero {
     text-align: center;
-    flex-shrink: 0;
 }
 
-.card-image img {
-    width: 160px;
-    height: 160px;
+.hero-qr {
+    width: 240px;
+    height: 240px;
     object-fit: contain;
     border: 1px solid var(--color-border);
     border-radius: var(--radius-sm);
     background: #fff;
+    padding: 0.5rem;
+    box-shadow: var(--shadow);
+}
+
+.hero-label {
+    display: block;
+    font-size: 0.8rem;
+    color: var(--color-success);
+    font-weight: 600;
+    margin-top: 0.5rem;
+}
+
+/* --- Card Content -------------------------------------------------------- */
+.card-content-section {
+    width: 100%;
+    max-width: 480px;
 }
 
 .card-label {
@@ -434,14 +429,9 @@ section h2 {
     font-size: 0.8rem;
     font-weight: 600;
     color: var(--color-text-secondary);
-    margin-bottom: 0.5rem;
+    margin-bottom: 0.4rem;
     text-transform: uppercase;
     letter-spacing: 0.05em;
-}
-
-.card-content {
-    flex: 1;
-    min-width: 200px;
 }
 
 .content-textarea {
@@ -462,10 +452,58 @@ section h2 {
     border-color: var(--color-primary);
 }
 
-.content-actions {
+/* --- Card Actions -------------------------------------------------------- */
+.card-actions {
     display: flex;
-    gap: 0.5rem;
-    margin-top: 0.5rem;
+    gap: 0.75rem;
+}
+
+/* --- Card Details (collapsible) ----------------------------------------- */
+.card-details {
+    width: 100%;
+    max-width: 480px;
+    border-top: 1px solid var(--color-border);
+    padding-top: 0.75rem;
+}
+
+.card-details summary {
+    cursor: pointer;
+    font-size: 0.85rem;
+    color: var(--color-text-secondary);
+    font-weight: 500;
+    user-select: none;
+}
+
+.card-details summary:hover {
+    color: var(--color-primary);
+}
+
+.details-images {
+    display: flex;
+    gap: 1rem;
+    margin-top: 0.75rem;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+.detail-thumb {
+    text-align: center;
+}
+
+.detail-thumb img {
+    width: 140px;
+    height: 140px;
+    object-fit: contain;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    background: #fff;
+}
+
+.detail-thumb span {
+    display: block;
+    font-size: 0.8rem;
+    color: var(--color-text-secondary);
+    margin-top: 0.3rem;
 }
 
 /* --- Utility ------------------------------------------------------------- */
@@ -487,18 +525,9 @@ section h2 {
         padding: 1rem;
     }
 
-    .card-body {
-        flex-direction: column;
-        align-items: center;
-    }
-
-    .card-image img {
-        width: 140px;
-        height: 140px;
-    }
-
-    .card-content {
-        width: 100%;
+    .hero-qr {
+        width: 200px;
+        height: 200px;
     }
 
     .upload-zone {
@@ -507,6 +536,15 @@ section h2 {
 
     .preview-actions {
         flex-direction: column;
+    }
+
+    .card-actions {
+        flex-direction: column;
+        width: 100%;
+    }
+
+    .card-actions .btn {
+        width: 100%;
     }
 }
 
@@ -517,9 +555,8 @@ section h2 {
     margin-top: 0.5rem;
     background: rgba(0, 0, 0, 0.15);
     border-radius: var(--radius-sm);
-    color: rgba(255, 255, 255, 0.85);
+    color: rgba(255, 255, 255, 0.7);
     font-size: 0.85rem;
-    line-height: 1.6;
 }
 .footer a {
     color: rgba(255, 255, 255, 0.95);
@@ -528,9 +565,4 @@ section h2 {
 }
 .footer a:hover {
     color: #fff;
-}
-.footer-note {
-    font-size: 0.8rem;
-    color: rgba(255, 255, 255, 0.65);
-    margin-top: 0.2rem;
 }
