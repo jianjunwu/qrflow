@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+*.egg
+*.whl
+
+# Virtual environment
+venv/
+.venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Project specific
+uploads/
+output/
+.pytest_cache/
+
+# Claude Code
+.claude/
+CLAUDE.md
+
+# uv
+.python-version
+
+# OS
+.DS_Store
+Thumbs.db

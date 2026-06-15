@@ -1,0 +1,42 @@
+[project]
+name = "qrflow"
+version = "1.1.0"
+description = "QR Code Reconstructor — detect, enhance, recognise and reconstruct QR codes"
+requires-python = ">=3.10"
+license = {text = "Non-Commercial Use Only"}
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "python-multipart>=0.0.9",
+    "typer>=0.12",
+    "opencv-python>=4.8,<4.12",
+    "opencv-contrib-python>=4.8,<4.12",
+    "pyzbar>=0.1.9",
+    "Pillow>=10.0",
+    "qrcode[pil]>=7.4",
+    "numpy>=1.24",
+    "zxing-cpp>=2.2",
+    "pydantic-settings>=2.0",
+]
+
+[project.scripts]
+qrflow = "qrflow.cli:app"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/qrflow"]
+
+[tool.uv]
+dev-dependencies = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.24",
+    "httpx>=0.27",
+    "mypy>=1.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"

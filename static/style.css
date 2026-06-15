@@ -1,0 +1,536 @@
+/* ==========================================================================
+   QR Code Reconstructor — Stylesheet
+   Copyright (c) 2026 QR Reconstructor Authors
+   License: Non-Commercial Use Only — see LICENSE file for full terms.
+
+   Modern, clean design with card-based results layout.
+   ========================================================================== */
+
+/* --- Reset & Base -------------------------------------------------------- */
+*, *::before, *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+:root {
+    --color-bg: #f0f4f8;
+    --color-surface: #ffffff;
+    --color-primary: #4f46e5;
+    --color-primary-hover: #4338ca;
+    --color-primary-light: #eef2ff;
+    --color-success: #16a34a;
+    --color-success-bg: #f0fdf4;
+    --color-error: #dc2626;
+    --color-error-bg: #fef2f2;
+    --color-warning: #f59e0b;
+    --color-warning-bg: #fffbeb;
+    --color-text: #1e293b;
+    --color-text-secondary: #64748b;
+    --color-border: #e2e8f0;
+    --color-border-hover: #cbd5e1;
+    --radius: 12px;
+    --radius-sm: 8px;
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+    --shadow: 0 1px 3px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.06);
+    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+    --transition: 0.2s ease;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans SC", sans-serif;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background-attachment: fixed;
+    color: var(--color-text);
+    line-height: 1.6;
+    min-height: 100vh;
+    padding: 2rem 1rem;
+}
+
+/* --- App Container ------------------------------------------------------- */
+.app-container {
+    max-width: 900px;
+    margin: 0 auto;
+}
+
+/* --- Header -------------------------------------------------------------- */
+.header {
+    text-align: center;
+    margin-bottom: 2rem;
+    color: #fff;
+}
+
+.header h1 {
+    font-size: 2rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.header .subtitle {
+    font-size: 1rem;
+    opacity: 0.9;
+}
+
+/* --- Sections ------------------------------------------------------------ */
+section {
+    background: var(--color-surface);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-lg);
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+}
+
+section h2 {
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin-bottom: 1rem;
+    color: var(--color-text);
+}
+
+/* --- Upload Zone --------------------------------------------------------- */
+.upload-section {
+    padding: 0;
+    overflow: hidden;
+}
+
+.upload-zone {
+    padding: 3rem 2rem;
+    text-align: center;
+    cursor: pointer;
+    border: 2px dashed var(--color-border);
+    border-radius: var(--radius);
+    transition: all var(--transition);
+}
+
+.upload-zone:hover,
+.upload-zone.drag-over {
+    border-color: var(--color-primary);
+    background: var(--color-primary-light);
+}
+
+.upload-zone.drag-over {
+    border-style: solid;
+    background: var(--color-primary-light);
+}
+
+.upload-icon {
+    color: var(--color-text-secondary);
+    margin-bottom: 1rem;
+}
+
+.upload-text {
+    font-size: 1.1rem;
+    color: var(--color-text);
+    margin-bottom: 0.5rem;
+}
+
+.upload-link {
+    color: var(--color-primary);
+    font-weight: 600;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+.upload-hint {
+    font-size: 0.85rem;
+    color: var(--color-text-secondary);
+}
+
+/* --- Preview Area -------------------------------------------------------- */
+.preview-area {
+    text-align: center;
+    padding: 1.5rem;
+}
+
+.preview-wrapper {
+    position: relative;
+    display: inline-block;
+}
+
+.preview-image {
+    max-width: 300px;
+    max-height: 300px;
+    border-radius: var(--radius-sm);
+    box-shadow: var(--shadow);
+    margin-bottom: 1rem;
+    border: 1px solid var(--color-border);
+    display: block;
+}
+
+/* --- Crop Overlay -------------------------------------------------------- */
+.crop-overlay {
+    position: absolute;
+    border: 2px dashed var(--color-primary);
+    background: rgba(79, 70, 229, 0.15);
+    pointer-events: none;
+    z-index: 10;
+}
+
+/* --- Crop Hint ----------------------------------------------------------- */
+.crop-hint {
+    text-align: center;
+    padding: 0.75rem;
+    color: var(--color-text-secondary);
+    font-size: 0.9rem;
+}
+
+.btn-start-crop {
+    background: var(--color-warning-bg);
+    color: var(--color-warning);
+    border: 1px solid #fde68a;
+    margin-left: 0.5rem;
+}
+
+.btn-start-crop:hover {
+    background: #fef3c7;
+}
+
+.preview-actions {
+    display: flex;
+    gap: 0.75rem;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+/* --- Buttons ------------------------------------------------------------- */
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    padding: 0.625rem 1.25rem;
+    font-size: 0.95rem;
+    font-weight: 500;
+    border: none;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all var(--transition);
+    font-family: inherit;
+}
+
+.btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.btn-primary {
+    background: var(--color-primary);
+    color: #fff;
+}
+
+.btn-primary:hover:not(:disabled) {
+    background: var(--color-primary-hover);
+    transform: translateY(-1px);
+    box-shadow: var(--shadow);
+}
+
+.btn-secondary {
+    background: var(--color-border);
+    color: var(--color-text);
+}
+
+.btn-secondary:hover {
+    background: var(--color-border-hover);
+}
+
+.btn-small {
+    padding: 0.375rem 0.75rem;
+    font-size: 0.85rem;
+}
+
+.btn-copy {
+    background: var(--color-primary-light);
+    color: var(--color-primary);
+}
+
+.btn-copy:hover {
+    background: #dde4ff;
+}
+
+.btn-download {
+    background: var(--color-success-bg);
+    color: var(--color-success);
+}
+
+.btn-download:hover {
+    background: #dcfce7;
+}
+
+/* --- Regions Section ----------------------------------------------------- */
+.regions-section {
+    padding: 1.5rem;
+}
+
+.regions-thumbnails {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.region-thumb {
+    text-align: center;
+    flex-shrink: 0;
+}
+
+.region-thumb img {
+    width: 120px;
+    height: 120px;
+    object-fit: contain;
+    border: 2px solid var(--color-primary);
+    border-radius: var(--radius-sm);
+    background: #fff;
+    box-shadow: var(--shadow-sm);
+}
+
+.region-label {
+    display: block;
+    margin-top: 0.4rem;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--color-primary);
+}
+
+/* --- Progress Section ---------------------------------------------------- */
+.progress-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.progress-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.75rem 1rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.95rem;
+    border: 1px solid var(--color-border);
+    transition: all var(--transition);
+}
+
+.progress-item.pending {
+    background: #f8fafc;
+    color: var(--color-text-secondary);
+}
+
+.progress-item.success {
+    background: var(--color-success-bg);
+    border-color: #bbf7d0;
+    color: var(--color-success);
+}
+
+.progress-item.failed {
+    background: var(--color-warning-bg);
+    border-color: #fde68a;
+    color: var(--color-warning);
+}
+
+.progress-item.error {
+    background: var(--color-error-bg);
+    border-color: #fecaca;
+    color: var(--color-error);
+}
+
+.progress-step-name {
+    font-weight: 500;
+}
+
+.progress-status {
+    font-size: 0.85rem;
+}
+
+/* --- Error Section ------------------------------------------------------- */
+.error-card {
+    padding: 1rem;
+    background: var(--color-error-bg);
+    border: 1px solid #fecaca;
+    border-radius: var(--radius-sm);
+    color: var(--color-error);
+    font-weight: 500;
+}
+
+/* --- Results Section ----------------------------------------------------- */
+.result-count {
+    font-weight: 400;
+    font-size: 0.9rem;
+    color: var(--color-text-secondary);
+}
+
+.results-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.no-results {
+    text-align: center;
+    padding: 2rem;
+    color: var(--color-text-secondary);
+}
+
+.no-results p {
+    margin-bottom: 0.5rem;
+}
+
+/* --- Result Card --------------------------------------------------------- */
+.result-card {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    box-shadow: var(--shadow-sm);
+    transition: box-shadow var(--transition);
+}
+
+.result-card:hover {
+    box-shadow: var(--shadow-lg);
+}
+
+.card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.75rem 1rem;
+    background: var(--color-primary-light);
+    border-bottom: 1px solid var(--color-border);
+}
+
+.card-number {
+    font-weight: 700;
+    color: var(--color-primary);
+    font-size: 0.95rem;
+}
+
+.card-sources {
+    font-size: 0.8rem;
+    color: var(--color-text-secondary);
+}
+
+.card-body {
+    display: flex;
+    gap: 1rem;
+    padding: 1rem;
+    align-items: flex-start;
+    flex-wrap: wrap;
+}
+
+.card-image {
+    text-align: center;
+    flex-shrink: 0;
+}
+
+.card-image img {
+    width: 160px;
+    height: 160px;
+    object-fit: contain;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    background: #fff;
+}
+
+.card-label {
+    display: block;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--color-text-secondary);
+    margin-bottom: 0.5rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.card-content {
+    flex: 1;
+    min-width: 200px;
+}
+
+.content-textarea {
+    width: 100%;
+    padding: 0.6rem;
+    font-family: "SF Mono", "Fira Code", "Consolas", monospace;
+    font-size: 0.85rem;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    background: #f8fafc;
+    resize: none;
+    color: var(--color-text);
+    line-height: 1.4;
+}
+
+.content-textarea:focus {
+    outline: none;
+    border-color: var(--color-primary);
+}
+
+.content-actions {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+}
+
+/* --- Utility ------------------------------------------------------------- */
+.hidden {
+    display: none !important;
+}
+
+/* --- Responsive ---------------------------------------------------------- */
+@media (max-width: 768px) {
+    body {
+        padding: 1rem 0.5rem;
+    }
+
+    .header h1 {
+        font-size: 1.5rem;
+    }
+
+    section {
+        padding: 1rem;
+    }
+
+    .card-body {
+        flex-direction: column;
+        align-items: center;
+    }
+
+    .card-image img {
+        width: 140px;
+        height: 140px;
+    }
+
+    .card-content {
+        width: 100%;
+    }
+
+    .upload-zone {
+        padding: 2rem 1rem;
+    }
+
+    .preview-actions {
+        flex-direction: column;
+    }
+}
+
+/* --- Footer -------------------------------------------------------------- */
+.footer {
+    text-align: center;
+    padding: 1rem;
+    margin-top: 0.5rem;
+    background: rgba(0, 0, 0, 0.15);
+    border-radius: var(--radius-sm);
+    color: rgba(255, 255, 255, 0.85);
+    font-size: 0.85rem;
+    line-height: 1.6;
+}
+.footer a {
+    color: rgba(255, 255, 255, 0.95);
+    text-decoration: underline;
+    font-weight: 500;
+}
+.footer a:hover {
+    color: #fff;
+}
+.footer-note {
+    font-size: 0.8rem;
+    color: rgba(255, 255, 255, 0.65);
+    margin-top: 0.2rem;
+}

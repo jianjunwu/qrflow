@@ -1,0 +1,636 @@
+<!--
+  Copyright (c) 2026 QR Reconstructor Authors
+  License: Non-Commercial Use Only — see LICENSE file for full terms.
+-->
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QR Reconstructor · QR码重建工具</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="header">
+            <h1>🔍 QR Reconstructor</h1>
+            <p class="subtitle">上传破损或模糊的QR码，自动增强识别并重建高清版本</p>
+        </header>
+
+        <!-- Upload Zone -->
+        <section class="upload-section">
+            <div class="upload-zone" id="uploadZone">
+                <div class="upload-content">
+                    <svg class="upload-icon" viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+                        <polyline points="17 8 12 3 7 8"/>
+                        <line x1="12" y1="3" x2="12" y2="15"/>
+                    </svg>
+                    <p class="upload-text">拖拽图片到此处，或 <span class="upload-link">点击选择文件</span></p>
+                    <p class="upload-hint">支持 PNG、JPG、BMP、GIF、WebP、TIFF 格式</p>
+                </div>
+                <input type="file" id="fileInput" accept="image/png,image/jpeg,image/bmp,image/gif,image/webp,image/tiff" hidden>
+            </div>
+
+            <!-- Preview of uploaded image -->
+            <div class="preview-area hidden" id="previewArea">
+                <div class="preview-wrapper" id="previewWrapper">
+                    <img id="previewImage" alt="预览图片" class="preview-image">
+                    <div class="crop-overlay hidden" id="cropOverlay"></div>
+                </div>
+                <div class="crop-hint" id="cropHint">
+                    未自动检测到QR码，您可以：
+                    <button class="btn btn-small btn-start-crop" id="btnStartCrop">手动框选QR区域</button>
+                </div>
+                <div class="preview-actions">
+                    <button class="btn btn-secondary" id="btnChangeFile">更换图片</button>
+                    <button class="btn btn-primary" id="btnProcess">🚀 开始处理</button>
+                    <button class="btn btn-primary hidden" id="btnManualProcess">✂️ 使用框选区域处理</button>
+                    <button class="btn btn-secondary hidden" id="btnCancelCrop">取消框选</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- Cropped Regions -->
+        <section class="regions-section hidden" id="regionsSection">
+            <h2>检测到 <span id="regionCount">0</span> 个QR码区域</h2>
+            <div class="regions-thumbnails" id="regionsThumbnails"></div>
+        </section>
+
+        <!-- Progress Section -->
+        <section class="progress-section hidden" id="progressSection">
+            <h2>处理进度</h2>
+            <div class="progress-list" id="progressList"></div>
+        </section>
+
+        <!-- Error Section -->
+        <section class="error-section hidden" id="errorSection">
+            <div class="error-card" id="errorMessage"></div>
+        </section>
+
+        <!-- Results Section -->
+        <section class="results-section hidden" id="resultsSection">
+            <h2>去重结果 <span class="result-count" id="resultCount"></span></h2>
+            <div class="results-grid" id="resultsGrid"></div>
+        </section>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <p>作者 · 80s-mouzhai · <a href="https://github.com/80s-mouzhai" target="_blank">github.com/80s-mouzhai</a> · v1.0</p>
+            <p class="footer-note">欢迎技术交流与指导</p>
+        </footer>
+    </div>
+
+    <script>
+    (function() {
+        // --- DOM references ---
+        const uploadZone = document.getElementById('uploadZone');
+        const fileInput = document.getElementById('fileInput');
+        const previewArea = document.getElementById('previewArea');
+        const previewImage = document.getElementById('previewImage');
+        const btnChangeFile = document.getElementById('btnChangeFile');
+        const btnProcess = document.getElementById('btnProcess');
+        const regionsSection = document.getElementById('regionsSection');
+        const regionsThumbnails = document.getElementById('regionsThumbnails');
+        const regionCount = document.getElementById('regionCount');
+        const progressSection = document.getElementById('progressSection');
+        const progressList = document.getElementById('progressList');
+        const errorSection = document.getElementById('errorSection');
+        const errorMessage = document.getElementById('errorMessage');
+        const resultsSection = document.getElementById('resultsSection');
+        const resultsGrid = document.getElementById('resultsGrid');
+        const resultCount = document.getElementById('resultCount');
+        const previewWrapper = document.getElementById('previewWrapper');
+        const cropOverlay = document.getElementById('cropOverlay');
+        const cropHint = document.getElementById('cropHint');
+        const btnStartCrop = document.getElementById('btnStartCrop');
+        const btnManualProcess = document.getElementById('btnManualProcess');
+        const btnCancelCrop = document.getElementById('btnCancelCrop');
+
+        let uploadedFilename = null;
+        let processing = false;
+
+        // --- Crop selection state ---
+        let cropState = {
+            active: false,
+            drawing: false,
+            startX: 0, startY: 0,
+            endX: 0, endY: 0,
+            // Finalised original-image coordinates
+            origX: 0, origY: 0, origW: 0, origH: 0,
+        };
+
+        // --- Upload handling ---
+        uploadZone.addEventListener('click', () => fileInput.click());
+
+        uploadZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadZone.classList.add('drag-over');
+        });
+        uploadZone.addEventListener('dragleave', () => {
+            uploadZone.classList.remove('drag-over');
+        });
+        uploadZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadZone.classList.remove('drag-over');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) handleFile(files[0]);
+        });
+
+        fileInput.addEventListener('change', () => {
+            if (fileInput.files.length > 0) handleFile(fileInput.files[0]);
+        });
+
+        btnChangeFile.addEventListener('click', () => {
+            resetUpload();
+        });
+
+        btnProcess.addEventListener('click', () => {
+            if (!processing && uploadedFilename) startProcessing();
+        });
+
+        // --- File upload ---
+        async function handleFile(file) {
+            if (!file.type.startsWith('image/')) {
+                showError('请选择图片文件');
+                return;
+            }
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const resp = await fetch('/api/upload', { method: 'POST', body: formData });
+                const data = await resp.json();
+                if (data.success) {
+                    uploadedFilename = data.filename;
+                    // Show preview
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        previewImage.src = e.target.result;
+                        previewArea.classList.remove('hidden');
+                        uploadZone.classList.add('hidden');
+                    };
+                    reader.readAsDataURL(file);
+                    clearError();
+                    // Immediately detect QR regions
+                    detectRegions(data.filename);
+                } else {
+                    showError(data.error || '上传失败');
+                }
+            } catch (err) {
+                showError('上传失败: ' + err.message);
+            }
+        }
+
+        async function detectRegions(filename) {
+            try {
+                const resp = await fetch('/api/detect', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ filename }),
+                });
+                const data = await resp.json();
+                if (data.success && data.qr_regions && data.qr_regions.length > 0) {
+                    regionCount.textContent = data.qr_regions.length;
+                    regionsThumbnails.innerHTML = '';
+                    data.qr_regions.forEach((region, idx) => {
+                        const thumb = document.createElement('div');
+                        thumb.className = 'region-thumb';
+                        thumb.innerHTML = `
+                            <img src="${region.crop_base64}" alt="区域${idx + 1}">
+                            <span class="region-label">区域${idx + 1} (${region.source})</span>
+                        `;
+                        regionsThumbnails.appendChild(thumb);
+                    });
+                    regionsSection.classList.remove('hidden');
+                } else {
+                    regionsSection.classList.add('hidden');
+                }
+            } catch (err) {
+                // Silent fail — detection is optional before processing
+                regionsSection.classList.add('hidden');
+            }
+        }
+
+        function resetUpload() {
+            uploadedFilename = null;
+            previewArea.classList.add('hidden');
+            uploadZone.classList.remove('hidden');
+            fileInput.value = '';
+            regionsSection.classList.add('hidden');
+            progressSection.classList.add('hidden');
+            resultsSection.classList.add('hidden');
+            clearError();
+            cancelCropMode();
+        }
+
+        // --- Processing ---
+        async function startProcessing() {
+            processing = true;
+            btnProcess.disabled = true;
+            btnProcess.textContent = '⏳ 处理中...';
+            errorSection.classList.add('hidden');
+            regionsSection.classList.add('hidden');
+            progressSection.classList.remove('hidden');
+            resultsSection.classList.add('hidden');
+            progressList.innerHTML = '';
+
+            // Create placeholder progress items
+            const stepNames = ['原始图片', '对比度增强', '去噪处理', '自适应二值化', '形态学操作', '透视矫正', '超分辨率增强'];
+            const stepItems = stepNames.map((name) => {
+                const item = document.createElement('div');
+                item.className = 'progress-item pending';
+                item.innerHTML = `
+                    <span class="progress-step-name">${name}</span>
+                    <span class="progress-status">等待中...</span>
+                `;
+                progressList.appendChild(item);
+                return item;
+            });
+
+            try {
+                const resp = await fetch('/api/process', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ filename: uploadedFilename }),
+                });
+                const data = await resp.json();
+
+                if (!data.success) {
+                    showError(data.error || '处理失败');
+                    stepItems.forEach(item => {
+                        item.className = 'progress-item error';
+                        item.querySelector('.progress-status').textContent = '失败';
+                    });
+                    return;
+                }
+
+                // Show detected QR regions if any
+                if (data.qr_regions && data.qr_regions.length > 0) {
+                    regionCount.textContent = data.qr_regions.length;
+                    regionsThumbnails.innerHTML = '';
+                    data.qr_regions.forEach((region, idx) => {
+                        const thumb = document.createElement('div');
+                        thumb.className = 'region-thumb';
+                        thumb.innerHTML = `
+                            <img src="${region.crop_base64}" alt="区域${idx + 1}">
+                            <span class="region-label">区域${idx + 1} (${region.source})</span>
+                        `;
+                        regionsThumbnails.appendChild(thumb);
+                    });
+                    regionsSection.classList.remove('hidden');
+                }
+
+                // Rebuild progress items with actual step names from response
+                const steps = data.steps || [];
+                progressList.innerHTML = '';
+                steps.forEach((step) => {
+                    const item = document.createElement('div');
+                    const recog = step.recognition || {};
+
+                    item.className = recog.success
+                        ? 'progress-item success'
+                        : 'progress-item failed';
+
+                    const schemeInfo = recog.success
+                        ? ` (${recog.scheme || 'unknown'})`
+                        : '';
+                    const failedSchemes = (recog.all_results || [])
+                        .filter(r => !r.success).map(r => r.scheme).join(', ');
+                    const failedInfo = !recog.success
+                        ? ` (已尝试: ${failedSchemes || 'all'})`
+                        : '';
+
+                    item.innerHTML = `
+                        <span class="progress-step-name">${step.step_name || '未知步骤'}</span>
+                        <span class="progress-status">${recog.success ? '✓ 识别成功' + schemeInfo : '✗ 未识别' + failedInfo}</span>
+                    `;
+                    progressList.appendChild(item);
+                });
+
+                // Render results
+                renderResults(data);
+
+            } catch (err) {
+                showError('处理失败: ' + err.message);
+                stepItems.forEach(item => {
+                    item.className = 'progress-item error';
+                    item.querySelector('.progress-status').textContent = '错误';
+                });
+            } finally {
+                processing = false;
+                btnProcess.disabled = false;
+                btnProcess.textContent = '🚀 开始处理';
+            }
+        }
+
+        // --- Results rendering ---
+        function renderResults(data) {
+            const dedup = data.deduplicated || [];
+            resultsSection.classList.remove('hidden');
+            resultCount.textContent = `(${dedup.length} 条)`;
+            resultsGrid.innerHTML = '';
+
+            if (dedup.length === 0) {
+                resultsGrid.innerHTML = `
+                    <div class="no-results">
+                        <p>😔 未能在任何增强步骤中识别到QR码内容</p>
+                        <p>请尝试使用更清晰的图片或调整拍摄角度</p>
+                    </div>
+                `;
+                return;
+            }
+
+            const hasRegions = data.qr_regions && data.qr_regions.length > 0;
+
+            dedup.forEach((entry, idx) => {
+                const card = document.createElement('div');
+                card.className = 'result-card';
+
+                // Build image cards: show original + crop side-by-side when regions exist
+                const cropCard = hasRegions ? `
+                        <div class="card-image crop">
+                            <span class="card-label">裁剪区域</span>
+                            <img src="${data.qr_regions[0].crop_base64}" alt="裁剪QR码">
+                        </div>` : '';
+
+                card.innerHTML = `
+                    <div class="card-header">
+                        <span class="card-number">#${idx + 1}</span>
+                        <span class="card-sources">来源步骤: ${entry.source_steps.join('、')}</span>
+                    </div>
+                    <div class="card-body">
+                        <div class="card-image original">
+                            <span class="card-label">原图</span>
+                            <img src="${data.original_image_base64}" alt="原图">
+                        </div>
+                        ${cropCard}
+                        <div class="card-image reconstructed">
+                            <span class="card-label">重建QR码</span>
+                            <img src="${entry.reconstructed_qr_base64}" alt="重建QR码">
+                        </div>
+                        <div class="card-content">
+                            <span class="card-label">解码内容</span>
+                            <textarea readonly class="content-textarea" rows="3">${escapeHtml(entry.content)}</textarea>
+                            <div class="content-actions">
+                                <button class="btn btn-small btn-copy" data-content="${escapeHtml(entry.content)}">📋 复制</button>
+                                <button class="btn btn-small btn-download" data-qr="${entry.reconstructed_qr_base64}">💾 下载QR码</button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+
+                resultsGrid.appendChild(card);
+            });
+
+            // Bind copy buttons
+            resultsGrid.querySelectorAll('.btn-copy').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const content = btn.getAttribute('data-content');
+                    navigator.clipboard.writeText(content).then(() => {
+                        const original = btn.textContent;
+                        btn.textContent = '✓ 已复制';
+                        setTimeout(() => { btn.textContent = original; }, 2000);
+                    }).catch(() => {
+                        alert('复制失败，请手动复制');
+                    });
+                });
+            });
+
+            // Bind download buttons
+            resultsGrid.querySelectorAll('.btn-download').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const qrDataUri = btn.getAttribute('data-qr');
+                    const link = document.createElement('a');
+                    link.href = qrDataUri;
+                    link.download = `qr-code-${Date.now()}.png`;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                });
+            });
+        }
+
+        // --- Utilities ---
+        function showError(msg) {
+            errorSection.classList.remove('hidden');
+            errorMessage.textContent = '❌ ' + msg;
+        }
+
+        function clearError() {
+            errorSection.classList.add('hidden');
+            errorMessage.textContent = '';
+        }
+
+        function escapeHtml(str) {
+            const div = document.createElement('div');
+            div.appendChild(document.createTextNode(str));
+            return div.innerHTML;
+        }
+
+        // --- Manual crop selection ---
+        function startCropMode() {
+            if (!uploadedFilename) return;
+            cropState.active = true;
+            cropState.drawing = false;
+            cropState.origX = cropState.origY = cropState.origW = cropState.origH = 0;
+
+            btnStartCrop.classList.add('hidden');
+            btnManualProcess.classList.add('hidden');
+            btnCancelCrop.classList.remove('hidden');
+            cropHint.classList.add('hidden');
+            cropOverlay.classList.add('hidden');
+            previewImage.style.cursor = 'crosshair';
+
+            // Attach mouse listeners to the wrapper
+            previewWrapper.addEventListener('mousedown', onCropMouseDown);
+        }
+
+        function cancelCropMode() {
+            cropState.active = false;
+            cropState.drawing = false;
+            cropState.origX = cropState.origY = cropState.origW = cropState.origH = 0;
+
+            btnStartCrop.classList.remove('hidden');
+            cropHint.classList.remove('hidden');
+            btnManualProcess.classList.add('hidden');
+            btnCancelCrop.classList.add('hidden');
+            cropOverlay.classList.add('hidden');
+            previewImage.style.cursor = '';
+            previewWrapper.removeEventListener('mousedown', onCropMouseDown);
+            document.removeEventListener('mousemove', onCropMouseMove);
+            document.removeEventListener('mouseup', onCropMouseUp);
+        }
+
+        function onCropMouseDown(e) {
+            if (!cropState.active) return;
+            e.preventDefault();
+            cropState.drawing = true;
+
+            const rect = previewImage.getBoundingClientRect();
+            cropState.startX = e.clientX - rect.left;
+            cropState.startY = e.clientY - rect.top;
+            cropState.endX = cropState.startX;
+            cropState.endY = cropState.startY;
+
+            updateCropOverlay();
+            document.addEventListener('mousemove', onCropMouseMove);
+            document.addEventListener('mouseup', onCropMouseUp);
+        }
+
+        function onCropMouseMove(e) {
+            if (!cropState.drawing) return;
+            const rect = previewImage.getBoundingClientRect();
+            cropState.endX = Math.max(0, Math.min(e.clientX - rect.left, rect.width));
+            cropState.endY = Math.max(0, Math.min(e.clientY - rect.top, rect.height));
+            updateCropOverlay();
+        }
+
+        function onCropMouseUp(e) {
+            if (!cropState.drawing) return;
+            cropState.drawing = false;
+            document.removeEventListener('mousemove', onCropMouseMove);
+            document.removeEventListener('mouseup', onCropMouseUp);
+
+            const rect = previewImage.getBoundingClientRect();
+            cropState.endX = Math.max(0, Math.min(e.clientX - rect.left, rect.width));
+            cropState.endY = Math.max(0, Math.min(e.clientY - rect.top, rect.height));
+
+            // Compute normalised box (top-left, width, height) in display pixels
+            const bx = Math.min(cropState.startX, cropState.endX);
+            const by = Math.min(cropState.startY, cropState.endY);
+            const bw = Math.abs(cropState.endX - cropState.startX);
+            const bh = Math.abs(cropState.endY - cropState.startY);
+
+            // Convert to original image coordinates
+            const scaleX = previewImage.naturalWidth / rect.width;
+            const scaleY = previewImage.naturalHeight / rect.height;
+
+            cropState.startX = bx;
+            cropState.startY = by;
+            cropState.endX = bx + bw;
+            cropState.endY = by + bh;
+            cropState.origX = Math.round(bx * scaleX);
+            cropState.origY = Math.round(by * scaleY);
+            cropState.origW = Math.round(bw * scaleX);
+            cropState.origH = Math.round(bh * scaleY);
+
+            updateCropOverlay();
+
+            // Show confirm button only when the selection is meaningful
+            if (cropState.origW > 5 && cropState.origH > 5) {
+                btnManualProcess.classList.remove('hidden');
+            }
+        }
+
+        function updateCropOverlay() {
+            const bx = Math.min(cropState.startX, cropState.endX);
+            const by = Math.min(cropState.startY, cropState.endY);
+            const bw = Math.abs(cropState.endX - cropState.startX);
+            const bh = Math.abs(cropState.endY - cropState.startY);
+
+            // Position overlay relative to the wrapper
+            const imgLeft = previewImage.offsetLeft;
+            const imgTop = previewImage.offsetTop;
+
+            cropOverlay.style.left = (imgLeft + bx) + 'px';
+            cropOverlay.style.top = (imgTop + by) + 'px';
+            cropOverlay.style.width = bw + 'px';
+            cropOverlay.style.height = bh + 'px';
+            cropOverlay.classList.toggle('hidden', bw < 2 || bh < 2);
+        }
+
+        // --- Button handlers ---
+        btnStartCrop.addEventListener('click', startCropMode);
+        btnCancelCrop.addEventListener('click', cancelCropMode);
+
+        btnManualProcess.addEventListener('click', function() {
+            if (!uploadedFilename || cropState.origW <= 0 || cropState.origH <= 0) return;
+            processManualCrop();
+        });
+
+        async function processManualCrop() {
+            processing = true;
+            btnProcess.disabled = true;
+            btnManualProcess.disabled = true;
+            btnCancelCrop.disabled = true;
+            errorSection.classList.add('hidden');
+            regionsSection.classList.add('hidden');
+            progressSection.classList.remove('hidden');
+            resultsSection.classList.add('hidden');
+            progressList.innerHTML = '';
+
+            const stepNames = ['原始图片', '对比度增强', '去噪处理', '自适应二值化', '形态学操作', '透视矫正', '超分辨率增强'];
+            const stepItems = stepNames.map((name) => {
+                const item = document.createElement('div');
+                item.className = 'progress-item pending';
+                item.innerHTML = `
+                    <span class="progress-step-name">${name}</span>
+                    <span class="progress-status">等待中...</span>
+                `;
+                progressList.appendChild(item);
+                return item;
+            });
+
+            try {
+                const resp = await fetch('/api/manual_crop', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        filename: uploadedFilename,
+                        x: cropState.origX,
+                        y: cropState.origY,
+                        width: cropState.origW,
+                        height: cropState.origH,
+                    }),
+                });
+                const data = await resp.json();
+
+                if (!data.success) {
+                    showError(data.error || '裁剪处理失败');
+                    stepItems.forEach(item => {
+                        item.className = 'progress-item error';
+                        item.querySelector('.progress-status').textContent = '失败';
+                    });
+                    return;
+                }
+
+                // Rebuild progress items with actual step names
+                const steps = data.steps || [];
+                progressList.innerHTML = '';
+                steps.forEach((step) => {
+                    const item = document.createElement('div');
+                    const recog = step.recognition || {};
+                    item.className = recog.success ? 'progress-item success' : 'progress-item failed';
+
+                    const schemeInfo = recog.success ? ` (${recog.scheme || 'unknown'})` : '';
+                    const failedSchemes = (recog.all_results || [])
+                        .filter(r => !r.success).map(r => r.scheme).join(', ');
+                    const failedInfo = !recog.success ? ` (已尝试: ${failedSchemes || 'all'})` : '';
+
+                    item.innerHTML = `
+                        <span class="progress-step-name">✂️ 框选·${step.step_name || '未知步骤'}</span>
+                        <span class="progress-status">${recog.success ? '✓ 识别成功' + schemeInfo : '✗ 未识别' + failedInfo}</span>
+                    `;
+                    progressList.appendChild(item);
+                });
+
+                renderResults(data);
+            } catch (err) {
+                showError('裁剪处理失败: ' + err.message);
+                stepItems.forEach(item => {
+                    item.className = 'progress-item error';
+                    item.querySelector('.progress-status').textContent = '错误';
+                });
+            } finally {
+                processing = false;
+                btnProcess.disabled = false;
+                btnManualProcess.disabled = false;
+                btnCancelCrop.disabled = false;
+            }
+        }
+    })();
+    </script>
+</body>
+</html>
