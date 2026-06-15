@@ -1,5 +1,5 @@
 # Copyright (c) 2026 QRFlow Authors
-# License: Non-Commercial Use Only — see LICENSE file for full terms.
+# License: MIT
 
 """Perspective correction via finder-pattern detection."""
 

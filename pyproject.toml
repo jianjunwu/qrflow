@@ -1,9 +1,10 @@
 [project]
 name = "qrflow"
 version = "0.0.1"
-description = "qrflow — detect, enhance, recognise and reconstruct QR codes"
+description = "qrflow — QR code reconstruction toolkit"
 requires-python = ">=3.10"
-license = {text = "Non-Commercial Use Only"}
+license = {text = "MIT"}
+license-files = ["LICENSE"]
 authors = [
     {name = "jianjunwu", email = "jianjunwu@users.noreply.github.com"},
 ]
