@@ -7,7 +7,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>qrflow · QR码重建工具</title>
+    <title>qrflow · 图片丢进来，高清 QR 码拿出去</title>
     <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
@@ -15,11 +15,11 @@
         <!-- Header -->
         <header class="header">
             <h1>qrflow</h1>
-            <p class="subtitle">上传破损或模糊的QR码，自动增强识别并重建高清版本</p>
+            <p class="subtitle">图片丢进来，高清 QR 码拿出去</p>
         </header>
 
-        <!-- Upload Zone -->
-        <section class="upload-section">
+        <!-- Upload Zone (shown when no files or user returns to upload) -->
+        <section class="upload-section" id="uploadSection">
             <div class="upload-zone" id="uploadZone">
                 <div class="upload-content">
                     <svg class="upload-icon" viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -28,39 +28,62 @@
                         <line x1="12" y1="3" x2="12" y2="15"/>
                     </svg>
                     <p class="upload-text">拖拽图片到此处，或 <span class="upload-link">点击选择文件</span></p>
-                    <p class="upload-hint">支持 PNG、JPG、BMP、GIF、WebP、TIFF 格式</p>
+                    <p class="upload-hint">支持 PNG、JPG、BMP、GIF、WebP、TIFF 格式，可多选</p>
                     <p class="paste-hint">也可以直接 Ctrl+V 粘贴剪贴板中的图片</p>
                 </div>
-                <input type="file" id="fileInput" accept="image/png,image/jpeg,image/bmp,image/gif,image/webp,image/tiff" hidden>
+                <input type="file" id="fileInput" accept="image/png,image/jpeg,image/bmp,image/gif,image/webp,image/tiff" multiple hidden>
             </div>
+        </section>
 
-            <!-- Preview of uploaded image -->
-            <div class="preview-area hidden" id="previewArea">
+        <!-- Thumbnail Strip (shown when files exist) -->
+        <section class="thumbnail-strip hidden" id="thumbnailStrip">
+            <div class="thumbnails-scroll" id="thumbnailsScroll"></div>
+            <button class="btn btn-thumb-add" id="btnThumbAdd" title="添加图片">+</button>
+            <button class="btn-clear-all" id="btnClearAll">清空全部</button>
+        </section>
+
+        <!-- Main Content (two-column during processing) -->
+        <div class="main-content" id="mainContent">
+            <!-- Preview Area -->
+            <section class="preview-section hidden" id="previewSection">
                 <div class="preview-wrapper" id="previewWrapper">
                     <img id="previewImage" alt="预览图片" class="preview-image">
-                    <div class="crop-overlay hidden" id="cropOverlay"></div>
+                    <div class="crop-overlay hidden" id="cropOverlay">
+                        <div class="crop-handle nw" data-handle="nw"></div>
+                        <div class="crop-handle n"  data-handle="n"></div>
+                        <div class="crop-handle ne" data-handle="ne"></div>
+                        <div class="crop-handle e"  data-handle="e"></div>
+                        <div class="crop-handle se" data-handle="se"></div>
+                        <div class="crop-handle s"  data-handle="s"></div>
+                        <div class="crop-handle sw" data-handle="sw"></div>
+                        <div class="crop-handle w"  data-handle="w"></div>
+                        <div class="crop-size-label hidden" id="cropSizeLabel"></div>
+                    </div>
                 </div>
                 <div class="crop-hint hidden" id="cropHint">
-                    未自动检测到QR码，您可以手动框选QR区域重新处理
+                    未自动检测到QR码，您可以手动框选QR区域后重新处理
                 </div>
+
+                <!-- Compact Progress -->
+                <div class="progress-inline hidden" id="progressInline">
+                    <div class="progress-track">
+                        <div class="progress-fill" id="progressFill"></div>
+                    </div>
+                    <span class="progress-text" id="progressText"></span>
+                </div>
+                <div class="step-list hidden" id="stepList"></div>
+
                 <div class="preview-actions">
+                    <button class="btn btn-secondary" id="btnReturnUpload">返回上传</button>
                     <button class="btn btn-secondary" id="btnChangeFile">更换图片</button>
                     <button class="btn btn-secondary hidden" id="btnStartCrop">手动框选QR区域</button>
+                    <button class="btn btn-primary" id="btnProcess">开始处理</button>
+                    <button class="btn btn-process-all hidden" id="btnProcessAll" title="处理全部已上传的图片">处理全部</button>
                     <button class="btn btn-primary hidden" id="btnManualProcess">使用框选区域处理</button>
                     <button class="btn btn-secondary hidden" id="btnCancelCrop">取消框选</button>
                 </div>
-            </div>
-        </section>
-
-        <!-- Progress Section -->
-        <section class="progress-section hidden" id="progressSection">
-            <div class="progress-container">
-                <div class="progress-bar">
-                    <div class="progress-fill" id="progressFill"></div>
-                </div>
-                <p class="progress-text" id="progressText">正在处理...</p>
-            </div>
-        </section>
+            </section>
+        </div>
 
         <!-- Error Section -->
         <section class="error-section hidden" id="errorSection">
@@ -69,44 +92,82 @@
 
         <!-- Results Section -->
         <section class="results-section hidden" id="resultsSection">
-            <h2>处理结果 <span class="result-count" id="resultCount"></span></h2>
-            <div class="results-grid" id="resultsGrid"></div>
+            <h2 id="resultsTitle">处理结果</h2>
+            <div class="results-layout">
+                <div class="results-sidebar" id="resultsSidebar"></div>
+                <div class="results-main" id="resultsGroups"></div>
+            </div>
         </section>
 
         <!-- Footer -->
         <footer class="footer">
-            <p><a href="https://github.com/jianjunwu/qrflow" target="_blank">QRFlow</a> — QR码增强识别与重建工具</p>
+            <p><a href="https://github.com/jianjunwu/qrflow" target="_blank">QRFlow</a> — 图片丢进来，高清 QR 码拿出去</p>
         </footer>
+    </div>
+
+    <!-- QR Lightbox -->
+    <div class="lightbox hidden" id="qrLightbox">
+        <div class="lightbox-backdrop" id="lightboxBackdrop"></div>
+        <div class="lightbox-content" id="lightboxContent">
+            <button class="lightbox-close" id="lightboxClose">&times;</button>
+            <img id="lightboxImage" alt="QR码大图">
+            <div class="lightbox-info" id="lightboxInfo"></div>
+        </div>
     </div>
 
     <script>
     (function() {
-        // --- DOM references ---
+        // ============================================================
+        // DOM references
+        // ============================================================
+        const uploadSection = document.getElementById('uploadSection');
         const uploadZone = document.getElementById('uploadZone');
         const fileInput = document.getElementById('fileInput');
-        const previewArea = document.getElementById('previewArea');
+        const thumbnailStrip = document.getElementById('thumbnailStrip');
+        const thumbnailsScroll = document.getElementById('thumbnailsScroll');
+        const btnThumbAdd = document.getElementById('btnThumbAdd');
+        const btnClearAll = document.getElementById('btnClearAll');
+        const mainContent = document.getElementById('mainContent');
+        const previewSection = document.getElementById('previewSection');
         const previewImage = document.getElementById('previewImage');
-        const btnChangeFile = document.getElementById('btnChangeFile');
+        const previewWrapper = document.getElementById('previewWrapper');
+        const cropOverlay = document.getElementById('cropOverlay');
+        const cropSizeLabel = document.getElementById('cropSizeLabel');
         const cropHint = document.getElementById('cropHint');
+        const btnReturnUpload = document.getElementById('btnReturnUpload');
+        const btnChangeFile = document.getElementById('btnChangeFile');
         const btnStartCrop = document.getElementById('btnStartCrop');
+        const btnProcess = document.getElementById('btnProcess');
+        const btnProcessAll = document.getElementById('btnProcessAll');
         const btnManualProcess = document.getElementById('btnManualProcess');
         const btnCancelCrop = document.getElementById('btnCancelCrop');
-        const progressSection = document.getElementById('progressSection');
+        const progressInline = document.getElementById('progressInline');
         const progressFill = document.getElementById('progressFill');
         const progressText = document.getElementById('progressText');
+        const stepList = document.getElementById('stepList');
         const errorSection = document.getElementById('errorSection');
         const errorMessage = document.getElementById('errorMessage');
         const resultsSection = document.getElementById('resultsSection');
-        const resultsGrid = document.getElementById('resultsGrid');
-        const resultCount = document.getElementById('resultCount');
-        const previewWrapper = document.getElementById('previewWrapper');
-        const cropOverlay = document.getElementById('cropOverlay');
+        const resultsTitle = document.getElementById('resultsTitle');
+        const resultsSidebar = document.getElementById('resultsSidebar');
+        const resultsGroups = document.getElementById('resultsGroups');
+        const qrLightbox = document.getElementById('qrLightbox');
+        const lightboxBackdrop = document.getElementById('lightboxBackdrop');
+        const lightboxClose = document.getElementById('lightboxClose');
+        const lightboxContent = document.getElementById('lightboxContent');
+        const lightboxImage = document.getElementById('lightboxImage');
+        const lightboxInfo = document.getElementById('lightboxInfo');
 
-        let uploadedFilename = null;
+        // ============================================================
+        // State
+        // ============================================================
+        const uploadedFiles = new Map();   // id -> file record
+        let activeFileId = null;
+        let activeResultTabId = null;
         let processing = false;
         let abortController = null;
         let progressTimer = null;
-        let qrRegions = [];
+        let fileIdCounter = 0;
 
         const PROGRESS_MESSAGES = [
             '正在分析图像特征...',
@@ -115,22 +176,38 @@
             '正在重建高清版本...',
         ];
 
-        // --- Paste from clipboard ---
-        document.addEventListener('paste', (e) => {
-            if (processing) return;
-            const items = e.clipboardData.items;
-            for (const item of items) {
-                if (item.type.startsWith('image/')) {
-                    e.preventDefault();
-                    const file = item.getAsFile();
-                    handleFile(file);
-                    return;
-                }
-            }
-        });
+        // ============================================================
+        // Crop state
+        // ============================================================
+        let cropState = {
+            active: false,
+            drawing: false,
+            dragging: false,
+            resizing: false,
+            resizeHandle: null,
+            startX: 0, startY: 0,
+            endX: 0, endY: 0,
+            origX: 0, origY: 0, origW: 0, origH: 0,
+            dragOffX: 0, dragOffY: 0,
+        };
 
-        // --- Upload handling ---
+        // ============================================================
+        // Helpers
+        // ============================================================
+        function getActiveFile() {
+            return activeFileId ? uploadedFiles.get(activeFileId) : null;
+        }
+
+        function getActiveResults() {
+            const f = getActiveFile();
+            return f ? f.results : null;
+        }
+
+        // ============================================================
+        // Upload handling
+        // ============================================================
         uploadZone.addEventListener('click', () => fileInput.click());
+        btnThumbAdd.addEventListener('click', () => fileInput.click());
 
         uploadZone.addEventListener('dragover', (e) => {
             e.preventDefault();
@@ -142,91 +219,274 @@
         uploadZone.addEventListener('drop', (e) => {
             e.preventDefault();
             uploadZone.classList.remove('drag-over');
-            const files = e.dataTransfer.files;
-            if (files.length > 0) handleFile(files[0]);
+            handleFiles(e.dataTransfer.files);
         });
 
         fileInput.addEventListener('change', () => {
-            if (fileInput.files.length > 0) handleFile(fileInput.files[0]);
+            if (fileInput.files.length > 0) {
+                handleFiles(fileInput.files);
+                fileInput.value = '';
+            }
+        });
+
+        // Paste
+        document.addEventListener('paste', (e) => {
+            if (processing) return;
+            const files = [];
+            for (const item of e.clipboardData.items) {
+                if (item.type.startsWith('image/')) {
+                    files.push(item.getAsFile());
+                }
+            }
+            if (files.length > 0) {
+                e.preventDefault();
+                handleFiles(files);
+            }
+        });
+
+        btnClearAll.addEventListener('click', () => {
+            uploadedFiles.clear();
+            activeFileId = null;
+            activeResultTabId = null;
+            updateUI();
+        });
+
+        async function handleFiles(files) {
+            const fileList = Array.from(files).filter(f => f.type.startsWith('image/'));
+            if (fileList.length === 0) {
+                showError('请选择图片文件');
+                return;
+            }
+            clearError();
+
+            // Phase 1: Read all dataURIs in parallel, build records
+            const records = await Promise.all(
+                fileList.map(async (file) => {
+                    const id = 'f' + (++fileIdCounter);
+                    const dataUri = await readFileAsDataUri(file);
+                    return {
+                        id,
+                        filename: null,
+                        originalName: file.name,
+                        dataUri,
+                        regions: [],
+                        results: null,
+                        processed: false,
+                        status: 'uploading',
+                        _file: file,
+                    };
+                })
+            );
+
+            for (const rec of records) {
+                const { _file, ...record } = rec;
+                uploadedFiles.set(rec.id, record);
+            }
+            if (!activeFileId || !uploadedFiles.has(activeFileId)) {
+                activeFileId = uploadedFiles.keys().next().value;
+            }
+            updateUI();
+
+            // Phase 2: Upload + detect all in parallel
+            await Promise.allSettled(
+                records.map(async (rec) => {
+                    const record = uploadedFiles.get(rec.id);
+                    if (!record) return;
+                    try {
+                        const formData = new FormData();
+                        formData.append('file', rec._file);
+                        const resp = await fetch('/api/upload', { method: 'POST', body: formData });
+                        const data = await resp.json();
+                        if (data.success) {
+                            record.filename = data.filename;
+                            record.status = 'detecting';
+                            updateUI();
+                            await detectRegionsForFile(record);
+                            record.status = 'ready';
+                        } else {
+                            record.status = 'error';
+                        }
+                    } catch (err) {
+                        record.status = 'error';
+                    }
+                    updateUI();
+                })
+            );
+        }
+
+        function readFileAsDataUri(file) {
+            return new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.onload = (e) => resolve(e.target.result);
+                reader.readAsDataURL(file);
+            });
+        }
+
+        async function detectRegionsForFile(record) {
+            if (!record.filename) return;
+            try {
+                const resp = await fetch('/api/detect', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ filename: record.filename }),
+                });
+                const data = await resp.json();
+                if (data.success && data.qr_regions && data.qr_regions.length > 0) {
+                    record.regions = data.qr_regions;
+                } else {
+                    record.regions = [];
+                }
+            } catch (err) {
+                record.regions = [];
+            }
+        }
+
+        // ============================================================
+        // File selection / removal
+        // ============================================================
+        function removeFile(id) {
+            uploadedFiles.delete(id);
+            if (activeFileId === id) {
+                activeFileId = uploadedFiles.keys().next().value || null;
+            }
+            updateUI();
+        }
+
+        function selectFile(id) {
+            if (processing) return;
+            activeFileId = id;
+            cancelCropMode();
+            clearError();
+            updateUI();
+        }
+
+        btnReturnUpload.addEventListener('click', () => {
+            activeFileId = null;
+            updateUI();
         });
 
         btnChangeFile.addEventListener('click', () => {
             if (processing) {
                 abortProcessing();
             }
-            resetAll();
+            const oldId = activeFileId;
+            fileInput.click();
+            // After new file selected, remove old one
+            const origChange = fileInput.onchange;
+            fileInput.onchange = () => {
+                if (oldId) uploadedFiles.delete(oldId);
+                if (fileInput.files.length > 0) {
+                    handleFiles(fileInput.files);
+                } else if (!uploadedFiles.size) {
+                    activeFileId = null;
+                    updateUI();
+                }
+                fileInput.value = '';
+                fileInput.onchange = origChange;
+            };
         });
 
-        // --- File upload (auto-process) ---
-        async function handleFile(file) {
-            if (!file.type.startsWith('image/')) {
-                showError('请选择图片文件');
-                return;
-            }
-            const formData = new FormData();
-            formData.append('file', file);
+        // ============================================================
+        // UI update
+        // ============================================================
+        function updateUI() {
+            renderThumbnails();
 
-            try {
-                const resp = await fetch('/api/upload', { method: 'POST', body: formData });
-                const data = await resp.json();
-                if (!data.success) {
-                    showError(data.error || '上传失败，请重试');
-                    return;
+            const hasFiles = uploadedFiles.size > 0;
+            const activeFile = getActiveFile();
+
+            uploadSection.classList.toggle('hidden', hasFiles && activeFileId !== null);
+            thumbnailStrip.classList.toggle('hidden', !hasFiles);
+            previewSection.classList.toggle('hidden', !activeFile);
+            mainContent.classList.toggle('has-preview', !!activeFile);
+
+            if (activeFile) {
+                previewImage.src = activeFile.dataUri;
+                const hasRegions = activeFile.regions && activeFile.regions.length > 0;
+                cropHint.classList.toggle('hidden', hasRegions);
+                btnStartCrop.classList.toggle('hidden', !hasRegions && !cropState.active);
+
+                if (activeFile.processed && activeFile.results) {
+                    renderAllResults();
                 }
+            }
 
-                uploadedFilename = data.filename;
-                const reader = new FileReader();
-                reader.onload = (e) => {
-                    previewImage.src = e.target.result;
-                    previewArea.classList.remove('hidden');
-                    uploadZone.classList.add('hidden');
-                };
-                reader.readAsDataURL(file);
-                clearError();
+            // Show "process all" when multiple files have pending work
+            if (!processing) {
+                let pendingCount = 0;
+                uploadedFiles.forEach((r) => { if (r.filename && !r.processed) pendingCount++; });
+                btnProcessAll.classList.toggle('hidden', pendingCount <= 1);
+            }
 
-                // Detect regions then auto-process
-                await detectRegions(data.filename);
-                startProcessing();
-            } catch (err) {
-                showError('上传失败，请检查网络连接后重试');
+            if (!hasFiles) {
+                activeFileId = null;
+                uploadSection.classList.remove('hidden');
+                thumbnailStrip.classList.add('hidden');
+                previewSection.classList.add('hidden');
+                progressInline.classList.add('hidden');
+                stepList.classList.add('hidden');
+                resultsSection.classList.add('hidden');
+                mainContent.classList.remove('has-preview');
             }
         }
 
-        async function detectRegions(filename) {
-            try {
-                const resp = await fetch('/api/detect', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ filename }),
+        function renderThumbnails() {
+            thumbnailsScroll.innerHTML = '';
+            uploadedFiles.forEach((record, id) => {
+                const thumb = document.createElement('div');
+                thumb.className = 'thumb-item' + (id === activeFileId ? ' active' : '');
+                if (record.processed && record.results) {
+                    const dedup = record.results.deduplicated || [];
+                    thumb.classList.add(dedup.length > 0 ? 'status-ok' : 'status-empty');
+                } else if (record.status === 'uploading' || record.status === 'detecting') {
+                    thumb.classList.add('status-uploading');
+                } else if (record.status === 'error') {
+                    thumb.classList.add('status-error');
+                }
+                let statusOverlay = '';
+                if (record.status === 'uploading' || record.status === 'detecting') {
+                    statusOverlay = '<div class="thumb-status"><div class="thumb-spinner"></div></div>';
+                } else if (record.status === 'error') {
+                    statusOverlay = '<div class="thumb-status error"><span class="thumb-error-icon">!</span></div>';
+                }
+                thumb.innerHTML = `
+                    <img src="${record.dataUri}" alt="${record.originalName}">
+                    ${statusOverlay}
+                    <span class="thumb-name">${record.originalName}</span>
+                    <button class="thumb-remove" title="删除">&times;</button>
+                `;
+                thumb.querySelector('img').addEventListener('click', () => selectFile(id));
+                thumb.querySelector('.thumb-remove').addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    removeFile(id);
                 });
-                const data = await resp.json();
-                if (data.success && data.qr_regions && data.qr_regions.length > 0) {
-                    qrRegions = data.qr_regions;
-                } else {
-                    qrRegions = [];
-                }
-            } catch (err) {
-                qrRegions = [];
+                thumbnailsScroll.appendChild(thumb);
+            });
+        }
+
+        // ============================================================
+        // Processing
+        // ============================================================
+        btnProcess.addEventListener('click', () => {
+            if (processing) {
+                abortProcessing();
+            } else {
+                startProcessing();
             }
-        }
+        });
 
-        function resetAll() {
-            uploadedFilename = null;
-            qrRegions = [];
-            previewArea.classList.add('hidden');
-            uploadZone.classList.remove('hidden');
-            fileInput.value = '';
-            progressSection.classList.add('hidden');
-            resultsSection.classList.add('hidden');
-            clearError();
-            cancelCropMode();
-        }
+        btnProcessAll.addEventListener('click', () => {
+            if (processing) {
+                abortProcessing();
+            } else {
+                startProcessingAll();
+            }
+        });
 
-        // --- Progress ---
         function startProgress() {
-            progressSection.classList.remove('hidden');
-            resultsSection.classList.add('hidden');
-            errorSection.classList.add('hidden');
+            progressInline.classList.remove('hidden');
+            stepList.classList.add('hidden');
+            stepList.innerHTML = '';
             progressFill.className = 'progress-fill active';
             progressText.textContent = PROGRESS_MESSAGES[0];
 
@@ -237,58 +497,150 @@
             }, 2500);
         }
 
-        function finishProgress(success) {
+        function finishProgress(success, message) {
             clearInterval(progressTimer);
             progressTimer = null;
             progressFill.className = success ? 'progress-fill done' : 'progress-fill error';
-            progressText.textContent = success ? '处理完成' : '未能识别到QR码';
+            progressText.textContent = message || (success ? '处理完成' : '未能识别到QR码');
+            setTimeout(() => {
+                progressInline.classList.add('hidden');
+                stepList.classList.add('hidden');
+            }, success ? 2000 : 4000);
         }
 
-        // --- Processing ---
+        function populateSteps(steps) {
+            stepList.classList.remove('hidden');
+            stepList.innerHTML = '';
+            steps.forEach((step) => {
+                const recog = step.recognition || {};
+                const ok = recog.success;
+
+                const item = document.createElement('div');
+                item.className = 'step-item ' + (ok ? 'step-ok' : 'step-fail');
+                item.innerHTML = `
+                    <div class="step-summary">
+                        <span class="step-icon">${ok ? '✓' : '✗'}</span>
+                        <span class="step-name">${escapeHtml(step.step_name || '')}</span>
+                        ${ok ? `<span class="step-backend">${recog.scheme || ''}</span>` : ''}
+                    </div>
+                    <div class="step-detail">
+                        ${step.image_base64 ? `<img src="${step.image_base64}" class="step-thumb" alt="">` : ''}
+                        <div class="step-backends">
+                            ${(recog.all_results || []).map(r =>
+                                `<span class="backend-result ${r.success ? 'ok' : 'fail'}">${r.scheme} ${r.success ? '✓' : '✗'}</span>`
+                            ).join('')}
+                        </div>
+                    </div>
+                `;
+                item.querySelector('.step-summary').addEventListener('click', () => {
+                    item.classList.toggle('expanded');
+                });
+                stepList.appendChild(item);
+            });
+        }
+
+        async function processFile(record) {
+            const resp = await fetch('/api/process', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ filename: record.filename }),
+                signal: abortController.signal,
+            });
+            const data = await resp.json();
+            if (!data.success) {
+                throw new Error(data.error || '未能识别到QR码内容');
+            }
+            if (data.qr_regions && data.qr_regions.length > 0) {
+                record.regions = data.qr_regions;
+            }
+            record.results = data;
+            record.processed = true;
+            return data;
+        }
+
         async function startProcessing() {
-            if (!uploadedFilename) return;
+            const activeFile = getActiveFile();
+            if (!activeFile || !activeFile.filename) return;
 
             processing = true;
             abortController = new AbortController();
-            btnChangeFile.textContent = '取消处理';
-            startProgress();
-
-            // Hide crop UI during processing
+            errorSection.classList.add('hidden');
+            resultsSection.classList.add('hidden');
             cancelCropMode();
             cropHint.classList.add('hidden');
+            btnProcess.textContent = '取消处理';
+            btnProcess.classList.add('btn-cancel');
+            btnProcessAll.classList.add('hidden');
+            startProgress();
 
             try {
-                const resp = await fetch('/api/process', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ filename: uploadedFilename }),
-                    signal: abortController.signal,
-                });
-                const data = await resp.json();
-
-                if (!data.success) {
-                    finishProgress(false);
-                    showError(data.error || '未能识别到QR码内容');
-                    return;
-                }
-
-                // Save regions from response if available
-                if (data.qr_regions && data.qr_regions.length > 0) {
-                    qrRegions = data.qr_regions;
-                }
-
+                const data = await processFile(activeFile);
                 finishProgress(true);
-                renderResults(data);
-
+                populateSteps(data.steps || []);
+                renderAllResults();
             } catch (err) {
                 if (err.name === 'AbortError') return;
                 finishProgress(false);
-                showError('处理失败，请检查网络连接后重试');
+                showError(err.message || '处理失败，请检查网络连接后重试');
             } finally {
                 processing = false;
                 abortController = null;
-                btnChangeFile.textContent = '更换图片';
+                btnProcess.textContent = '开始处理';
+                btnProcess.classList.remove('btn-cancel');
+                updateUI();
             }
+        }
+
+        async function startProcessingAll() {
+            const toProcess = [];
+            uploadedFiles.forEach((record) => {
+                if (record.filename && !record.processed) toProcess.push(record);
+            });
+            if (toProcess.length === 0) return;
+
+            processing = true;
+            abortController = new AbortController();
+            errorSection.classList.add('hidden');
+            resultsSection.classList.add('hidden');
+            cancelCropMode();
+            cropHint.classList.add('hidden');
+            btnProcess.classList.add('hidden');
+            btnProcessAll.textContent = '取消处理';
+            btnProcessAll.classList.add('btn-cancel');
+            btnProcessAll.classList.remove('hidden');
+            startProgress();
+
+            let completed = 0;
+            const total = toProcess.length;
+            let anySuccess = false;
+
+            for (const record of toProcess) {
+                try {
+                    const data = await processFile(record);
+                    anySuccess = true;
+                    completed++;
+                    progressText.textContent = `处理中 (${completed}/${total})`;
+                    populateSteps(data.steps || []);
+                    renderAllResults();
+                } catch (err) {
+                    if (err.name === 'AbortError') return;
+                    completed++;
+                    progressText.textContent = `处理中 (${completed}/${total})`;
+                }
+            }
+
+            finishProgress(anySuccess, anySuccess ? `全部完成 (${completed}/${total})` : '所有文件均未能识别到QR码');
+            if (!anySuccess) {
+                showError('所有文件均未能识别到QR码');
+            }
+            renderAllResults();
+
+            processing = false;
+            abortController = null;
+            btnProcessAll.textContent = '处理全部';
+            btnProcessAll.classList.remove('btn-cancel');
+            btnProcess.classList.remove('hidden');
+            updateUI();
         }
 
         function abortProcessing() {
@@ -299,40 +651,95 @@
             clearInterval(progressTimer);
             progressTimer = null;
             processing = false;
-            progressSection.classList.add('hidden');
-            btnChangeFile.textContent = '更换图片';
+            progressInline.classList.add('hidden');
+            stepList.classList.add('hidden');
+            btnProcess.textContent = '开始处理';
+            btnProcess.classList.remove('btn-cancel');
+            btnProcessAll.textContent = '处理全部';
+            btnProcessAll.classList.remove('btn-cancel');
         }
 
-        // --- Results rendering ---
-        function renderResults(data) {
-            const dedup = data.deduplicated || [];
-            resultsSection.classList.remove('hidden');
-            resultCount.textContent = `（共 ${dedup.length} 条）`;
-            resultsGrid.innerHTML = '';
+        // ============================================================
+        // Results rendering
+        // ============================================================
+        function renderAllResults() {
+            const processedFiles = [];
+            uploadedFiles.forEach((record, id) => {
+                if (record.processed && record.results) processedFiles.push({ id, record });
+            });
 
-            if (dedup.length === 0) {
-                resultsGrid.innerHTML = `
-                    <div class="no-results">
-                        <p>未能识别到QR码内容</p>
-                        <p>请尝试使用更清晰的图片，或手动框选QR码区域</p>
-                        <button class="btn btn-secondary" id="btnRetryCrop">手动框选QR区域</button>
-                    </div>
+            if (processedFiles.length === 0) return;
+
+            resultsSection.classList.remove('hidden');
+
+            // Render sidebar file list
+            let totalResults = 0;
+            resultsSidebar.innerHTML = '';
+
+            processedFiles.forEach(({ id, record }) => {
+                const dedup = record.results.deduplicated || [];
+                totalResults += dedup.length;
+
+                const item = document.createElement('div');
+                item.className = 'results-file-item' + (id === activeResultTabId ? ' active' : '');
+                const badgeClass = dedup.length > 0 ? 'ok' : 'empty';
+                const badgeText = dedup.length > 0 ? `${dedup.length}` : '—';
+                item.innerHTML = `
+                    <span class="results-file-name">${escapeHtml(record.originalName)}</span>
+                    <span class="results-file-badge ${badgeClass}">${badgeText}</span>
                 `;
-                document.getElementById('btnRetryCrop').addEventListener('click', () => {
-                    resultsSection.classList.add('hidden');
-                    cropHint.classList.remove('hidden');
-                    btnStartCrop.classList.remove('hidden');
-                    startCropMode();
+                item.addEventListener('click', () => {
+                    if (processing) return;
+                    activeResultTabId = id;
+                    renderAllResults();
                 });
+                resultsSidebar.appendChild(item);
+            });
+
+            // Set default active file
+            if (!activeResultTabId || !uploadedFiles.has(activeResultTabId) || !uploadedFiles.get(activeResultTabId).processed) {
+                const firstWithResults = processedFiles.find(p => (p.record.results.deduplicated || []).length > 0);
+                activeResultTabId = firstWithResults ? firstWithResults.id : processedFiles[0].id;
+                renderAllResults();
                 return;
             }
 
-            const hasRegions = qrRegions.length > 0;
+            resultsTitle.textContent = totalResults > 0 ? `处理结果（${processedFiles.length} 张图，共 ${totalResults} 条）` : '处理结果';
 
+            // Render active file's results
+            const activeRecord = uploadedFiles.get(activeResultTabId);
+            if (!activeRecord) return;
+
+            resultsGroups.innerHTML = '';
+            renderOneFileResults(activeResultTabId, activeRecord);
+            bindResultEvents();
+        }
+
+        function renderOneFileResults(id, record) {
+            const dedup = record.results.deduplicated || [];
+            const group = document.createElement('div');
+            group.className = 'result-group';
+
+            if (dedup.length === 0) {
+                group.innerHTML = `
+                    <div class="group-header">
+                        <span class="group-name">${escapeHtml(record.originalName)}</span>
+                        <span class="group-count">未识别到QR码</span>
+                    </div>
+                    <div class="no-results-inline">
+                        <p>未能识别到QR码内容</p>
+                        <button class="btn btn-secondary btn-small retry-crop-btn" data-file-id="${id}">手动框选QR区域</button>
+                    </div>
+                `;
+                resultsGroups.appendChild(group);
+                return;
+            }
+
+            const hasRegions = record.regions && record.regions.length > 0;
+            const data = record.results;
+
+            let cardsHTML = '';
             dedup.forEach((entry, idx) => {
-                const card = document.createElement('div');
-                card.className = 'result-card';
-
                 let detailsHTML = '';
                 if (hasRegions) {
                     detailsHTML = `
@@ -344,7 +751,7 @@
                                     <span>原图</span>
                                 </div>
                                 <div class="detail-thumb">
-                                    <img src="${qrRegions[0].crop_base64}" alt="检测区域">
+                                    <img src="${record.regions[0].crop_base64}" alt="检测区域">
                                     <span>检测到的QR区域</span>
                                 </div>
                             </div>
@@ -362,91 +769,187 @@
                         </details>`;
                 }
 
-                card.innerHTML = `
-                    <div class="card-header">
-                        <span class="card-number">#${idx + 1}</span>
-                        <span class="card-status success">已识别</span>
-                    </div>
-                    <div class="card-body">
-                        <div class="card-hero">
-                            <img src="${entry.reconstructed_qr_base64}" alt="重建QR码" class="hero-qr">
-                            <span class="hero-label">重建QR码 — 可直接扫描使用</span>
+                const isUrl = /^https?:\/\//i.test(entry.content);
+                const contentDisplay = isUrl
+                    ? `<span class="content-icon">🔗</span><span class="content-text">${escapeHtml(entry.content)}</span>`
+                    : escapeHtml(entry.content);
+
+                cardsHTML += `
+                    <div class="result-card animate-in" style="animation-delay:${idx * 0.08}s">
+                        <div class="card-body">
+                            <div class="card-hero">
+                                <img src="${entry.reconstructed_qr_base64}" alt="重建QR码" class="hero-qr" title="点击放大">
+                                <span class="hero-label">已重建 · 可直接扫描</span>
+                            </div>
+                            <div class="card-content-section">
+                                <div class="content-block ${isUrl ? 'is-url' : ''}">
+                                    ${contentDisplay}
+                                </div>
+                            </div>
+                            <div class="card-actions">
+                                <button class="btn btn-copy" data-content="${escapeHtml(entry.content)}">复制内容</button>
+                                <button class="btn btn-download" data-qr="${entry.reconstructed_qr_base64}">下载QR码</button>
+                            </div>
+                            ${detailsHTML}
                         </div>
-                        <div class="card-content-section">
-                            <label class="card-label">解码内容</label>
-                            <textarea readonly class="content-textarea" rows="2">${escapeHtml(entry.content)}</textarea>
-                        </div>
-                        <div class="card-actions">
-                            <button class="btn btn-copy" data-content="${escapeHtml(entry.content)}">复制内容</button>
-                            <button class="btn btn-download" data-qr="${entry.reconstructed_qr_base64}">下载QR码</button>
-                        </div>
-                        ${detailsHTML}
                     </div>
                 `;
-
-                resultsGrid.appendChild(card);
             });
 
-            // Bind copy buttons
-            resultsGrid.querySelectorAll('.btn-copy').forEach(btn => {
+            group.innerHTML = `
+                <div class="group-header">
+                    <span class="group-name">${escapeHtml(record.originalName)}</span>
+                    <span class="group-count">${dedup.length} 个结果</span>
+                </div>
+                <div class="group-cards">${cardsHTML}</div>
+                <div class="group-actions">
+                    <button class="btn btn-small btn-download-all" data-file-id="${id}">下载全部QR码</button>
+                    <button class="btn btn-small btn-copy-all" data-file-id="${id}">复制全部内容</button>
+                </div>
+            `;
+            resultsGroups.appendChild(group);
+        }
+
+        function bindResultEvents() {
+            // Copy buttons
+            resultsGroups.querySelectorAll('.btn-copy').forEach(btn => {
                 btn.addEventListener('click', () => {
                     const content = btn.getAttribute('data-content');
                     navigator.clipboard.writeText(content).then(() => {
-                        const original = btn.textContent;
                         btn.textContent = '已复制';
                         btn.classList.add('copied');
                         setTimeout(() => {
-                            btn.textContent = original;
+                            btn.textContent = '复制内容';
                             btn.classList.remove('copied');
                         }, 2000);
-                    }).catch(() => {
-                        alert('复制失败，请手动复制');
-                    });
+                    }).catch(() => alert('复制失败，请手动复制'));
                 });
             });
 
-            // Bind download buttons
-            resultsGrid.querySelectorAll('.btn-download').forEach(btn => {
+            // Download buttons
+            resultsGroups.querySelectorAll('.btn-download').forEach(btn => {
                 btn.addEventListener('click', () => {
-                    const qrDataUri = btn.getAttribute('data-qr');
-                    const link = document.createElement('a');
-                    link.href = qrDataUri;
-                    link.download = `qr-code-${Date.now()}.png`;
-                    document.body.appendChild(link);
-                    link.click();
-                    document.body.removeChild(link);
+                    downloadDataUri(btn.getAttribute('data-qr'), `qr-code-${Date.now()}.png`);
+                });
+            });
+
+            // Copy all for a group
+            resultsGroups.querySelectorAll('.btn-copy-all').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const fileId = btn.getAttribute('data-file-id');
+                    const record = uploadedFiles.get(fileId);
+                    if (!record || !record.results) return;
+                    const contents = (record.results.deduplicated || [])
+                        .map(e => e.content).join('\n');
+                    navigator.clipboard.writeText(contents).then(() => {
+                        btn.textContent = '已复制全部';
+                        setTimeout(() => { btn.textContent = '复制全部内容'; }, 2000);
+                    }).catch(() => alert('复制失败'));
+                });
+            });
+
+            // Download all for a group
+            resultsGroups.querySelectorAll('.btn-download-all').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const fileId = btn.getAttribute('data-file-id');
+                    const record = uploadedFiles.get(fileId);
+                    if (!record || !record.results) return;
+                    const entries = record.results.deduplicated || [];
+                    entries.forEach((entry, i) => {
+                        setTimeout(() => {
+                            downloadDataUri(entry.reconstructed_qr_base64, `qr-${i + 1}.png`);
+                        }, i * 300);
+                    });
+                    btn.textContent = `已下载 ${entries.length} 个`;
+                    setTimeout(() => { btn.textContent = '下载全部QR码'; }, 2000);
+                });
+            });
+
+            // QR lightbox
+            resultsGroups.querySelectorAll('.hero-qr').forEach(img => {
+                img.addEventListener('click', () => {
+                    lightboxImage.src = img.src;
+                    const card = img.closest('.result-card');
+                    const contentBlock = card ? card.querySelector('.content-block') : null;
+                    lightboxInfo.innerHTML = contentBlock ? contentBlock.innerHTML : '';
+                    qrLightbox.classList.remove('hidden');
+                });
+            });
+
+            // Retry crop
+            resultsGroups.querySelectorAll('.retry-crop-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const fileId = btn.getAttribute('data-file-id');
+                    activeFileId = fileId;
+                    const record = uploadedFiles.get(fileId);
+                    if (record) record.processed = false;
+                    resultsSection.classList.add('hidden');
+                    updateUI();
+                    cropHint.classList.remove('hidden');
+                    btnStartCrop.classList.remove('hidden');
+                    startCropMode();
                 });
             });
         }
 
-        // --- Utilities ---
-        function showError(msg) {
-            errorSection.classList.remove('hidden');
-            errorMessage.textContent = msg;
+        function downloadDataUri(dataUri, filename) {
+            const link = document.createElement('a');
+            link.href = dataUri;
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
         }
 
-        function clearError() {
-            errorSection.classList.add('hidden');
-            errorMessage.textContent = '';
+        // Preview image zoom
+        previewImage.addEventListener('click', () => {
+            const activeFile = getActiveFile();
+            if (!activeFile) return;
+            lightboxContent.classList.add('preview-zoom');
+            lightboxImage.src = activeFile.dataUri;
+            lightboxInfo.innerHTML = '';
+            qrLightbox.classList.remove('hidden');
+        });
+
+        // Lightbox
+        lightboxBackdrop.addEventListener('click', closeLightbox);
+        lightboxClose.addEventListener('click', closeLightbox);
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') closeLightbox();
+        });
+
+        function closeLightbox() {
+            qrLightbox.classList.add('hidden');
+            lightboxContent.classList.remove('preview-zoom');
         }
 
-        function escapeHtml(str) {
-            const div = document.createElement('div');
-            div.appendChild(document.createTextNode(str));
-            return div.innerHTML;
-        }
+        // ============================================================
+        // Manual crop
+        // ============================================================
+        btnStartCrop.addEventListener('click', () => {
+            if (!getActiveFile()) return;
+            startCropMode();
+        });
+        btnCancelCrop.addEventListener('click', cancelCropMode);
 
-        // --- Manual crop selection ---
+        btnManualProcess.addEventListener('click', () => {
+            if (!getActiveFile() || cropState.origW <= 0 || cropState.origH <= 0) return;
+            processManualCrop();
+        });
+
         function startCropMode() {
-            if (!uploadedFilename) return;
             cropState.active = true;
             cropState.drawing = false;
+            cropState.dragging = false;
+            cropState.resizing = false;
             cropState.origX = cropState.origY = cropState.origW = cropState.origH = 0;
 
             btnStartCrop.classList.add('hidden');
+            btnProcess.classList.add('hidden');
             btnManualProcess.classList.add('hidden');
             btnCancelCrop.classList.remove('hidden');
             cropOverlay.classList.add('hidden');
+            cropSizeLabel.classList.add('hidden');
             previewImage.style.cursor = 'crosshair';
 
             previewWrapper.addEventListener('mousedown', onCropMouseDown);
@@ -455,69 +958,36 @@
         function cancelCropMode() {
             cropState.active = false;
             cropState.drawing = false;
+            cropState.dragging = false;
+            cropState.resizing = false;
             cropState.origX = cropState.origY = cropState.origW = cropState.origH = 0;
 
             btnStartCrop.classList.add('hidden');
+            btnProcess.classList.remove('hidden');
             btnManualProcess.classList.add('hidden');
             btnCancelCrop.classList.add('hidden');
             cropHint.classList.add('hidden');
             cropOverlay.classList.add('hidden');
+            cropSizeLabel.classList.add('hidden');
             previewImage.style.cursor = '';
             previewWrapper.removeEventListener('mousedown', onCropMouseDown);
             document.removeEventListener('mousemove', onCropMouseMove);
             document.removeEventListener('mouseup', onCropMouseUp);
         }
 
-        // --- Crop state ---
-        let cropState = {
-            active: false,
-            drawing: false,
-            startX: 0, startY: 0,
-            endX: 0, endY: 0,
-            origX: 0, origY: 0, origW: 0, origH: 0,
-        };
-
-        function onCropMouseDown(e) {
-            if (!cropState.active) return;
-            e.preventDefault();
-            cropState.drawing = true;
-
-            const rect = previewImage.getBoundingClientRect();
-            cropState.startX = e.clientX - rect.left;
-            cropState.startY = e.clientY - rect.top;
-            cropState.endX = cropState.startX;
-            cropState.endY = cropState.startY;
-
-            updateCropOverlay();
-            document.addEventListener('mousemove', onCropMouseMove);
-            document.addEventListener('mouseup', onCropMouseUp);
-        }
-
-        function onCropMouseMove(e) {
-            if (!cropState.drawing) return;
-            const rect = previewImage.getBoundingClientRect();
-            cropState.endX = Math.max(0, Math.min(e.clientX - rect.left, rect.width));
-            cropState.endY = Math.max(0, Math.min(e.clientY - rect.top, rect.height));
-            updateCropOverlay();
-        }
-
-        function onCropMouseUp(e) {
-            if (!cropState.drawing) return;
-            cropState.drawing = false;
-            document.removeEventListener('mousemove', onCropMouseMove);
-            document.removeEventListener('mouseup', onCropMouseUp);
-
-            const rect = previewImage.getBoundingClientRect();
-            cropState.endX = Math.max(0, Math.min(e.clientX - rect.left, rect.width));
-            cropState.endY = Math.max(0, Math.min(e.clientY - rect.top, rect.height));
-
+        function getCropDisplayRect() {
             const bx = Math.min(cropState.startX, cropState.endX);
             const by = Math.min(cropState.startY, cropState.endY);
             const bw = Math.abs(cropState.endX - cropState.startX);
             const bh = Math.abs(cropState.endY - cropState.startY);
+            return { bx, by, bw, bh };
+        }
 
+        function syncCropOrig() {
+            const rect = previewImage.getBoundingClientRect();
             const scaleX = previewImage.naturalWidth / rect.width;
             const scaleY = previewImage.naturalHeight / rect.height;
+            const { bx, by, bw, bh } = getCropDisplayRect();
 
             cropState.startX = bx;
             cropState.startY = by;
@@ -527,20 +997,150 @@
             cropState.origY = Math.round(by * scaleY);
             cropState.origW = Math.round(bw * scaleX);
             cropState.origH = Math.round(bh * scaleY);
+        }
+
+        function onCropMouseDown(e) {
+            if (!cropState.active) return;
+
+            const rect = previewImage.getBoundingClientRect();
+            const mx = e.clientX - rect.left;
+            const my = e.clientY - rect.top;
+
+            // Check if clicking on a handle (only when box exists and not drawing)
+            if (!cropState.drawing && cropState.origW > 0) {
+                const handle = e.target.closest('.crop-handle');
+                if (handle) {
+                    e.preventDefault();
+                    cropState.resizing = true;
+                    cropState.resizeHandle = handle.dataset.handle;
+                    cropState.startX = mx;
+                    cropState.startY = my;
+                    document.addEventListener('mousemove', onCropMouseMove);
+                    document.addEventListener('mouseup', onCropMouseUp);
+                    return;
+                }
+
+                // Check if clicking inside the box to drag
+                const { bx, by, bw, bh } = getCropDisplayRect();
+                if (mx >= bx && mx <= bx + bw && my >= by && my <= by + bh) {
+                    e.preventDefault();
+                    cropState.dragging = true;
+                    cropState.dragOffX = mx - bx;
+                    cropState.dragOffY = my - by;
+                    document.addEventListener('mousemove', onCropMouseMove);
+                    document.addEventListener('mouseup', onCropMouseUp);
+                    return;
+                }
+            }
+
+            // Start new draw
+            e.preventDefault();
+            cropState.drawing = true;
+            cropState.dragging = false;
+            cropState.resizing = false;
+            cropOverlay.classList.remove('has-handles');
+            cropSizeLabel.classList.add('hidden');
+            btnManualProcess.classList.add('hidden');
+
+            cropState.startX = mx;
+            cropState.startY = my;
+            cropState.endX = mx;
+            cropState.endY = my;
 
             updateCropOverlay();
+            document.addEventListener('mousemove', onCropMouseMove);
+            document.addEventListener('mouseup', onCropMouseUp);
+        }
 
-            if (cropState.origW > 5 && cropState.origH > 5) {
-                btnManualProcess.classList.remove('hidden');
+        function onCropMouseMove(e) {
+            const rect = previewImage.getBoundingClientRect();
+            const mx = Math.max(0, Math.min(e.clientX - rect.left, rect.width));
+            const my = Math.max(0, Math.min(e.clientY - rect.top, rect.height));
+
+            if (cropState.drawing) {
+                cropState.endX = mx;
+                cropState.endY = my;
+                updateCropOverlay();
+                return;
+            }
+
+            if (cropState.resizing) {
+                const dx = mx - cropState.startX;
+                const dy = my - cropState.startY;
+                const h = cropState.resizeHandle;
+
+                let { bx, by, bw, bh } = getCropDisplayRect();
+
+                if (h.includes('e')) { cropState.endX = Math.max(bx + 10, cropState.endX + dx - (cropState.startX - mx)); }
+                if (h.includes('w')) { cropState.startX = Math.min(bx + bw - 10, cropState.startX + dx - (cropState.startX - mx)); }
+                if (h.includes('s')) { cropState.endY = Math.max(by + 10, cropState.endY + dy - (cropState.startY - my)); }
+                if (h.includes('n')) { cropState.startY = Math.min(by + bh - 10, cropState.startY + dy - (cropState.startY - my)); }
+
+                cropState.startX = Math.max(0, cropState.startX);
+                cropState.startY = Math.max(0, cropState.startY);
+                cropState.endX = Math.min(rect.width, cropState.endX);
+                cropState.endY = Math.min(rect.height, cropState.endY);
+
+                cropState.startX = mx - (cropState.endX - cropState.startX) / 2; // approximate for resize tracking
+                cropState.startY = my - (cropState.endY - cropState.startY) / 2;
+                cropState.startX = mx;
+                cropState.startY = my;
+                updateCropOverlay();
+                syncCropOrig();
+                updateSizeLabel();
+                return;
+            }
+
+            if (cropState.dragging) {
+                const { bw, bh } = getCropDisplayRect();
+                let newX = mx - cropState.dragOffX;
+                let newY = my - cropState.dragOffY;
+                newX = Math.max(0, Math.min(newX, rect.width - bw));
+                newY = Math.max(0, Math.min(newY, rect.height - bh));
+
+                cropState.startX = newX;
+                cropState.startY = newY;
+                cropState.endX = newX + bw;
+                cropState.endY = newY + bh;
+                updateCropOverlay();
+                syncCropOrig();
+                updateSizeLabel();
+                return;
             }
         }
 
-        function updateCropOverlay() {
-            const bx = Math.min(cropState.startX, cropState.endX);
-            const by = Math.min(cropState.startY, cropState.endY);
-            const bw = Math.abs(cropState.endX - cropState.startX);
-            const bh = Math.abs(cropState.endY - cropState.startY);
+        function onCropMouseUp(e) {
+            if (cropState.drawing) {
+                cropState.drawing = false;
+                const { bw, bh } = getCropDisplayRect();
+                syncCropOrig();
+                cropOverlay.classList.add('has-handles');
 
+                if (cropState.origW > 5 && cropState.origH > 5) {
+                    updateSizeLabel();
+                    btnManualProcess.classList.remove('hidden');
+                }
+            }
+
+            if (cropState.resizing || cropState.dragging) {
+                cropState.resizing = false;
+                cropState.dragging = false;
+                syncCropOrig();
+                updateSizeLabel();
+                if (cropState.origW > 5 && cropState.origH > 5) {
+                    btnManualProcess.classList.remove('hidden');
+                }
+            }
+
+            document.removeEventListener('mousemove', onCropMouseMove);
+            document.removeEventListener('mouseup', onCropMouseUp);
+
+            // Re-attach previewWrapper listener
+            previewWrapper.addEventListener('mousedown', onCropMouseDown);
+        }
+
+        function updateCropOverlay() {
+            const { bx, by, bw, bh } = getCropDisplayRect();
             const imgLeft = previewImage.offsetLeft;
             const imgTop = previewImage.offsetTop;
 
@@ -551,22 +1151,38 @@
             cropOverlay.classList.toggle('hidden', bw < 2 || bh < 2);
         }
 
-        // --- Button handlers ---
-        btnStartCrop.addEventListener('click', startCropMode);
-        btnCancelCrop.addEventListener('click', cancelCropMode);
+        function updateSizeLabel() {
+            cropSizeLabel.textContent = `${cropState.origW}×${cropState.origH} px`;
+            cropSizeLabel.classList.remove('hidden');
 
-        btnManualProcess.addEventListener('click', function() {
-            if (!uploadedFilename || cropState.origW <= 0 || cropState.origH <= 0) return;
-            processManualCrop();
+            const { by } = getCropDisplayRect();
+            const imgTop = previewImage.offsetTop;
+            cropSizeLabel.style.top = (imgTop + by - 24) + 'px';
+            cropSizeLabel.style.left = cropOverlay.style.left;
+        }
+
+        // Keyboard: Esc to delete crop box
+        document.addEventListener('keydown', (e) => {
+            if ((e.key === 'Escape' || e.key === 'Delete') && cropState.active && cropState.origW > 0) {
+                if (qrLightbox.classList.contains('hidden')) {
+                    cancelCropMode();
+                    startCropMode(); // re-enter crop mode
+                }
+            }
         });
 
+        // ============================================================
+        // Manual crop processing
+        // ============================================================
         async function processManualCrop() {
+            const activeFile = getActiveFile();
+            if (!activeFile || !activeFile.filename) return;
+
             processing = true;
+            abortController = new AbortController();
             btnManualProcess.disabled = true;
             btnCancelCrop.disabled = true;
-            btnChangeFile.textContent = '取消处理';
-            abortController = new AbortController();
-
+            btnProcess.classList.add('hidden');
             errorSection.classList.add('hidden');
             resultsSection.classList.add('hidden');
             cancelCropMode();
@@ -578,7 +1194,7 @@
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        filename: uploadedFilename,
+                        filename: activeFile.filename,
                         x: cropState.origX,
                         y: cropState.origY,
                         width: cropState.origW,
@@ -595,11 +1211,14 @@
                 }
 
                 if (data.qr_regions && data.qr_regions.length > 0) {
-                    qrRegions = data.qr_regions;
+                    activeFile.regions = data.qr_regions;
                 }
+                activeFile.results = data;
+                activeFile.processed = true;
 
                 finishProgress(true);
-                renderResults(data);
+                populateSteps(data.steps || []);
+                renderAllResults();
 
             } catch (err) {
                 if (err.name === 'AbortError') return;
@@ -610,8 +1229,28 @@
                 abortController = null;
                 btnManualProcess.disabled = false;
                 btnCancelCrop.disabled = false;
-                btnChangeFile.textContent = '更换图片';
+                btnProcess.classList.remove('hidden');
+                updateUI();
             }
+        }
+
+        // ============================================================
+        // Utilities
+        // ============================================================
+        function showError(msg) {
+            errorSection.classList.remove('hidden');
+            errorMessage.textContent = msg;
+        }
+
+        function clearError() {
+            errorSection.classList.add('hidden');
+            errorMessage.textContent = '';
+        }
+
+        function escapeHtml(str) {
+            const div = document.createElement('div');
+            div.appendChild(document.createTextNode(str));
+            return div.innerHTML;
         }
     })();
     </script>
