@@ -1,4 +1,4 @@
-# QR Reconstructor / QR 码重建工具
+# qrflow / QR 码重建工具
 
 **从含 QR 码的图片中检测、增强、识别并重建内容。**
 
@@ -10,7 +10,7 @@
 
 日常工作中经常收到含 QR 码的文档截图，这些图片往往分辨率低、经过压缩，或者 QR 码嵌在表格/印章/文字中间。用手机扫码需要角度完美、光线合适，效率极低。
 
-**QR Reconstructor** 自动识别图中的 QR 码位置，放大到可读级别，经过多步图像增强后解码，最终生成全新的高清 QR 码供你直接使用——全程在浏览器里完成，不需要安装任何 App。
+**qrflow** 自动识别图中的 QR 码位置，放大到可读级别，经过多步图像增强后解码，最终生成全新的高清 QR 码供你直接使用——全程在浏览器里完成，不需要安装任何 App。
 
 ---
 
@@ -27,42 +27,72 @@
 - 📷 **双引擎检测**：pyzbar + OpenCV 联合定位 QR 码
 - 🔍 **预放大**：小图自适应放大提高检测率
 - ✂️ **手动框选**：鼠标拖拽选区，人工精确调整
-- ✨ **图像增强**：自适应对比度/锐化/去噪
-- 📋 **内容重建**：去重 + 结构化展示
-- 🌐 **Web 界面**：Flask + 原生前端，开箱即用
+- ✨ **图像增强**：7 步增强流水线（对比度/去噪/二值化/形态学/透视矫正/超分辨率）
+- 🧩 **多方案识别**：pyzbar / OpenCV / WeChat QR / zxing-cpp 四后端自动切换
+- 📋 **内容重建**：去重 + 高清 QR 码生成
+- 🌐 **Web 界面**：FastAPI + 原生前端，开箱即用
 
 ## 快速开始
 
 ```bash
 # 1. 安装依赖
-pip install -r requirements.txt
+uv sync
 
 # 2. 启动服务
-python app.py
+uv run python -m qrflow.cli serve
 
-# 3. 打开浏览器
-# http://localhost:8080
+# 3. 或通过 CLI 自定义参数
+uv run qrflow serve -p 3000 --debug
 ```
 
-Windows 用户也可双击 `start.bat` 启动。
+也可以构建为 wheel 安装后使用：
+
+```bash
+uv build
+pip install dist/qrflow-*.whl
+qrflow serve -p 8080
+```
+
+## CLI 使用
+
+```bash
+qrflow serve --help
+
+# 选项
+#   -h, --host         绑定地址 (默认 0.0.0.0)
+#   -p, --port         端口 (默认 8080)
+#   --debug            调试模式 (热重载)
+#   --upload-dir       上传目录
+#   --output-dir       输出目录
+#   --max-upload-mb    最大上传大小 (MB)
+#   --no-browser       不自动打开浏览器
+
+# 环境变量
+QRFLOW_PORT=3000 qrflow serve
+```
 
 ## 项目结构
 
 ```
-qr-reconstructor/
-├── app.py                  # Flask 主入口
-├── core/
-│   ├── pipeline.py         # 核心流水线（检测→增强→识别→重建）
-│   ├── enhancer.py         # 图像增强模块
-│   ├── recognizer.py       # QR 码识别模块
-│   └── reconstructor.py    # 内容重建 + 去重
-├── templates/
-│   └── index.html          # Web 前端页面
-├── static/
-│   └── style.css           # 样式表
-├── tests/                  # 单元测试
-├── LICENSE                 # 许可证
-└── requirements.txt        # Python 依赖
+qrflow/
+├── pyproject.toml              # 项目元数据 + 依赖
+├── uv.lock                     # 依赖锁文件
+├── src/qrflow/
+│   ├── cli.py                  # typer CLI 入口
+│   ├── main.py                 # 应用启动
+│   ├── api/                    # FastAPI 路由层
+│   │   └── routes/             # upload / detect / process / crop
+│   ├── core/                   # 核心业务
+│   │   ├── pipeline.py         # 编排器
+│   │   ├── protocols.py        # 组件接口协议
+│   │   ├── enhance/            # 增强步骤 (7 个, 策略模式)
+│   │   ├── recognize/          # 识别后端 (4 个, 策略模式)
+│   │   └── reconstruct/        # 去重 + QR 生成
+│   ├── config/settings.py      # pydantic-settings 配置
+│   └── utils/                  # 工具函数
+├── templates/index.html        # Web 前端
+├── static/style.css            # 样式
+└── tests/                      # pytest (42 用例)
 ```
 
 ## 许可证
@@ -76,10 +106,10 @@ qr-reconstructor/
 
 ## 作者
 
-**80s-mouzhai** — [github.com/80s-mouzhai](https://github.com/80s-mouzhai)
+**jianjunwu** — [github.com/jianjunwu/qrflow](https://github.com/jianjunwu/qrflow)
 
 > 欢迎技术交流与指导
 
 ---
 
-© 2026 80s-mouzhai
+© 2026 jianjunwu

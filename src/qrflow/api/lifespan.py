@@ -1,4 +1,4 @@
-# Copyright (c) 2026 QR Reconstructor Authors
+# Copyright (c) 2026 QRFlow Authors
 # License: Non-Commercial Use Only — see LICENSE file for full terms.
 
 """FastAPI application factory with lifespan management."""
@@ -41,7 +41,7 @@ async def lifespan(app: FastAPI):
     settings.upload_path.mkdir(parents=True, exist_ok=True)
     settings.output_path.mkdir(parents=True, exist_ok=True)
     get_pipeline()
-    logger.info("QR Reconstructor ready on %s:%d", settings.host, settings.port)
+    logger.info("qrflow ready on %s:%d", settings.host, settings.port)
     yield
 
 
@@ -55,8 +55,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         settings = Settings()
 
     app = FastAPI(
-        title="QR Reconstructor",
-        version="1.1.0",
+        title="qrflow",
+        version="0.0.1",
         lifespan=lifespan,
     )
 

@@ -1,7 +1,7 @@
-# Copyright (c) 2026 QR Reconstructor Authors
+# Copyright (c) 2026 QRFlow Authors
 # License: Non-Commercial Use Only — see LICENSE file for full terms.
 
-"""CLI entry point for QR Reconstructor."""
+"""CLI entry point for qrflow."""
 
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ def serve(
     max_upload_mb: Annotated[int, typer.Option("--max-upload-mb", help="最大上传(MB)")] = 16,
     no_browser: Annotated[bool, typer.Option("--no-browser", help="不自动打开浏览器")] = False,
 ):
-    """启动 QR Reconstructor 服务"""
+    """启动 qrflow 服务"""
     from qrflow.main import run
 
     run(

@@ -1,3 +1,5 @@
-"""QR Flow — QR Code Reconstructor."""
+"""QRFlow — QR code reconstruction toolkit."""
 
-__version__ = "1.1.0"
+from importlib.metadata import version
+
+__version__ = version("qrflow")

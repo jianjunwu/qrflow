@@ -1,4 +1,4 @@
-# Copyright (c) 2026 QR Reconstructor Authors
+# Copyright (c) 2026 QRFlow Authors
 # License: Non-Commercial Use Only — see LICENSE file for full terms.
 
 """Application entry point.
@@ -15,14 +15,15 @@ import webbrowser
 
 import uvicorn
 
+from qrflow import __version__
 from qrflow.api.lifespan import create_app
 from qrflow.config.settings import Settings
 
 logger = logging.getLogger(__name__)
 
-BANNER = """=======================================================
-  QR Reconstructor  v1.1
-  作者 · 80s-mouzhai  ·  github.com/80s-mouzhai
+BANNER = f"""=======================================================
+  qrflow  v{__version__}
+  作者 · jianjunwu  ·  github.com/jianjunwu/qrflow
   欢迎技术交流与指导
 ======================================================="""
 
@@ -36,7 +37,7 @@ def configure_logging(debug: bool) -> None:
 
 
 def run(**overrides) -> None:
-    """Start the QR Reconstructor server.
+    """Start the qrflow server.
 
     Accepts keyword arguments that override Settings defaults.
     Priority: CLI args > environment > .env > defaults.
