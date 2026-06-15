@@ -33,6 +33,10 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["src/qrflow"]
 
+# Force-include _libs/ even though it's in .gitignore
+[tool.hatch.build.targets.wheel.force-include]
+"src/qrflow/_libs" = "qrflow/_libs"
+
 [tool.uv]
 dev-dependencies = [
     "pytest>=8.0",

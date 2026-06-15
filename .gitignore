@@ -28,6 +28,9 @@ output/
 .claude/
 CLAUDE.md
 
+# Bundled libs (generated during build)
+src/qrflow/_libs/
+
 # uv
 .python-version
 

@@ -1,0 +1,82 @@
+name: Build Release Wheels
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.runs-on }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macOS arm64
+            runs-on: macos-latest
+            platform-tag: macosx_11_0_arm64
+
+          - name: Linux x86_64
+            runs-on: ubuntu-latest
+            platform-tag: manylinux_2_17_x86_64
+
+          - name: Windows x86_64
+            runs-on: windows-latest
+            platform-tag: win_amd64
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install zbar (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libzbar0
+
+      - name: Install zbar (macOS)
+        if: runner.os == 'macOS'
+        run: HOMEBREW_NO_AUTO_UPDATE=1 brew install zbar
+
+      - name: Copy zbar libs
+        run: python scripts/copy_zbar.py
+
+      - name: Install build
+        run: pip install build
+
+      - name: Build wheel
+        run: python -m build --wheel
+
+      - name: Rewrite wheel tag to py3-none
+        run: python scripts/rewrite_tag.py ${{ matrix.platform-tag }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheels-${{ matrix.name }}
+          path: dist/*.whl
+
+  release:
+    name: Create GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+
+      - name: Collect wheels
+        run: |
+          mkdir dist
+          cp wheels-*/qrflow-*.whl dist/
+          ls -la dist/
+
+      - name: Create Release
+        run: |
+          gh release create "${{ github.ref_name }}" dist/*.whl \
+            --title "qrflow ${{ github.ref_name }}" \
+            --generate-notes
+        env:
+          GH_TOKEN: ${{ github.token }}
