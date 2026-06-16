@@ -341,7 +341,10 @@
             if (newFile && newFile.cropRects && newFile.cropRects.length > 0) {
                 cropState.rects = [...newFile.cropRects];
                 cropState.selectedIndex = -1;
-                btnConfirmCrop.classList.remove('hidden');
+                btnConfirmCrop.classList.add('hidden');
+                btnProcess.classList.add('hidden');
+                btnManualProcess.classList.remove('hidden');
+                btnManualProcess.textContent = `处理选中区域 (${cropState.rects.length})`;
                 renderAllCropOverlays();
             }
             clearError();
@@ -605,12 +608,48 @@
 
             for (const record of toProcess) {
                 try {
-                    const data = await processFile(record);
-                    anySuccess = true;
+                    if (record.cropRects && record.cropRects.length > 0) {
+                        for (const r of record.cropRects) {
+                            try {
+                                const resp = await fetch('/api/manual_crop', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({
+                                        filename: record.filename,
+                                        x: r.origX, y: r.origY, width: r.origW, height: r.origH,
+                                    }),
+                                    signal: abortController.signal,
+                                });
+                                const data = await resp.json();
+                                if (data.success) {
+                                    anySuccess = true;
+                                    if (data.steps) populateSteps(data.steps);
+                                    if (data.deduplicated) {
+                                        if (!record.results) record.results = data;
+                                        else {
+                                            const existing = record.results.deduplicated || [];
+                                            const merged = new Map();
+                                            existing.forEach(d => merged.set(d.content, d));
+                                            (data.deduplicated || []).forEach(d => { if (!merged.has(d.content)) merged.set(d.content, d); });
+                                            record.results.deduplicated = Array.from(merged.values());
+                                            record.results.dedup_count = record.results.deduplicated.length;
+                                        }
+                                    }
+                                }
+                                record.processed = true;
+                                renderAllResults();
+                            } catch (err) {
+                                if (err.name === 'AbortError') return;
+                            }
+                        }
+                    } else {
+                        const data = await processFile(record);
+                        anySuccess = true;
+                        populateSteps(data.steps || []);
+                        renderAllResults();
+                    }
                     completed++;
                     progressText.textContent = `处理中 (${completed}/${total})`;
-                    populateSteps(data.steps || []);
-                    renderAllResults();
                 } catch (err) {
                     if (err.name === 'AbortError') return;
                     completed++;
@@ -937,9 +976,6 @@
             // Restore saved rects from current file (if any)
             const f = getActiveFile();
             cropState.rects = f && f.cropRects ? [...f.cropRects] : [];
-            if (cropState.rects.length > 0) {
-                btnConfirmCrop.classList.remove('hidden');
-            }
             cropState.startX = cropState.startY = cropState.endX = cropState.endY = 0;
 
             btnStartCrop.classList.add('hidden');
@@ -953,16 +989,14 @@
             previewImage.style.cursor = 'crosshair';
 
             clearAllCropOverlays();
+            if (cropState.rects.length > 0) {
+                btnConfirmCrop.classList.remove('hidden');
+                renderAllCropOverlays();
+            }
             previewWrapper.addEventListener('mousedown', onCropMouseDown);
         }
 
         function cancelCropMode() {
-            // Save rects before clearing (so user can switch back later)
-            if (cropState.rects.length > 0) {
-                const f = getActiveFile();
-                if (f) f.cropRects = [...cropState.rects];
-            }
-
             cropState.active = false;
             cropState.drawing = false;
             cropState.dragging = false;
@@ -1047,11 +1081,22 @@
 
         function renderAllCropOverlays() {
             cropOverlays.innerHTML = '';
+            const imgRect = previewImage.getBoundingClientRect();
+            const scaleX = previewImage.naturalWidth / imgRect.width;
+            const scaleY = previewImage.naturalHeight / imgRect.height;
             const imgLeft = previewImage.offsetLeft;
             const imgTop = previewImage.offsetTop;
 
             // Render confirmed rects
             cropState.rects.forEach((rect, i) => {
+                // Recalculate display coords from orig coords so rects don't
+                // shift when the preview image changes size (e.g. crop-zoomed)
+                if (rect.origW > 0) {
+                    rect.startX = rect.origX / scaleX;
+                    rect.startY = rect.origY / scaleY;
+                    rect.endX = (rect.origX + rect.origW) / scaleX;
+                    rect.endY = (rect.origY + rect.origH) / scaleY;
+                }
                 const bx = Math.min(rect.startX, rect.endX);
                 const by = Math.min(rect.startY, rect.endY);
                 const bw = Math.abs(rect.endX - rect.startX);

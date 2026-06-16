@@ -326,11 +326,11 @@ section h2 {
     border: 1px solid var(--color-border);
     display: block;
     cursor: zoom-in;
-    transition: max-height var(--transition);
 }
 .preview-image.crop-zoomed {
     max-height: 80vh;
     cursor: crosshair;
+    transition: none;
 }
 
 /* --- Crop Overlays Container --------------------------------------------- */
