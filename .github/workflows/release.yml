@@ -44,6 +44,18 @@ jobs:
       - name: Copy zbar libs
         run: python scripts/copy_zbar.py
 
+      - name: Validate bundled libs have no missing deps
+        if: runner.os == 'Linux'
+        run: |
+          set -e
+          MISSING=$(ldd src/qrflow/_libs/libzbar.so.0 | grep 'not found' || true)
+          if [ -n "$MISSING" ]; then
+            echo "ERROR: bundled libzbar has missing dependencies:"
+            echo "$MISSING"
+            exit 1
+          fi
+          echo "All deps resolved — bundled libs are self-contained"
+
       - name: Install build
         run: pip install build
 

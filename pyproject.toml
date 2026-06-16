@@ -1,6 +1,6 @@
 [project]
 name = "qrflow"
-version = "0.0.4"
+version = "0.0.5"
 description = "qrflow — QR code reconstruction toolkit"
 requires-python = ">=3.10"
 license = {text = "MIT"}

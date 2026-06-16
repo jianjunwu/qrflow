@@ -21,6 +21,27 @@ else:
     if sys.platform == "darwin":
         _bundled = _libs_dir / "libzbar.dylib"
     elif sys.platform == "linux":
+        # Pre-load transitive deps before libzbar.so.0 so the linker can
+        # resolve them when libzbar loads.  Deps may themselves have deps,
+        # so retry until all are loaded or no further progress is made.
+        _pending = set()
+        for _p in _libs_dir.glob("*.so*"):
+            if _p.name in ("libzbar.so.0", "libzbar.so") or _p.is_symlink():
+                continue
+            _pending.add(_p)
+
+        while _pending:
+            _progress = False
+            for _p in list(_pending):
+                try:
+                    ctypes.cdll.LoadLibrary(str(_p))
+                    _pending.discard(_p)
+                    _progress = True
+                except OSError:
+                    pass
+            if not _progress:
+                break  # remaining deps have unsatisfied transitive deps
+
         _bundled = _libs_dir / "libzbar.so.0"
     else:
         _bundled = None
