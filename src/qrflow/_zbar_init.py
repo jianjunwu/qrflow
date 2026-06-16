@@ -1,22 +1,32 @@
-"""Patch library search paths so pyzbar finds the bundled zbar shared library.
+"""Patch pyzbar to load the bundled zbar shared library via explicit path.
 
 This module MUST be imported before any pyzbar import.
 It is loaded as the first import in qrflow/__init__.py.
+
+On Linux, setting LD_LIBRARY_PATH via os.environ does NOT affect the current
+process's dynamic linker — the linker reads it only at startup.  So we bypass
+find_library() entirely and pre-load the bundled .so/.dylib with an explicit
+path, then monkey-patch pyzbar.zbar_library.load() to return the cached handle.
 """
-import os
+import ctypes
 import sys
 from pathlib import Path
 
 _libs_dir = Path(__file__).resolve().parent / "_libs"
-_lib_path = str(_libs_dir)
 
-if _libs_dir.exists() and _libs_dir.is_dir():
+if not _libs_dir.exists() or not _libs_dir.is_dir():
+    # No bundled libs — pyzbar will try to find the system libzbar.
+    pass
+else:
     if sys.platform == "darwin":
-        existing = os.environ.get("DYLD_LIBRARY_PATH", "")
-        os.environ["DYLD_LIBRARY_PATH"] = f"{_lib_path}:{existing}" if existing else _lib_path
+        _bundled = _libs_dir / "libzbar.dylib"
     elif sys.platform == "linux":
-        existing = os.environ.get("LD_LIBRARY_PATH", "")
-        os.environ["LD_LIBRARY_PATH"] = f"{_lib_path}:{existing}" if existing else _lib_path
-    elif sys.platform == "win32":
-        existing = os.environ.get("PATH", "")
-        os.environ["PATH"] = f"{_lib_path};{existing}" if existing else _lib_path
+        _bundled = _libs_dir / "libzbar.so.0"
+    else:
+        _bundled = None
+
+    if _bundled and _bundled.exists():
+        _libzbar = ctypes.cdll.LoadLibrary(str(_bundled))
+
+        import pyzbar.zbar_library as _zbar_lib
+        _zbar_lib.load = lambda: (_libzbar, [])
