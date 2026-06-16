@@ -48,6 +48,16 @@ class TestPages:
         assert resp.status_code == 200
         assert "text/html" in resp.headers["content-type"]
 
+    def test_crop_button_visible_before_processing(self, client):
+        """btnStartCrop 在文件已选中但尚未处理时应可见，不依赖 processed 状态."""
+        resp = client.get("/")
+        html = resp.text
+
+        # 正确的逻辑：按钮仅在框选模式中隐藏
+        assert "btnStartCrop.classList.toggle('hidden', cropState.active);" in html
+        # bug 逻辑：按钮在处理前也会被隐藏 —— 不应存在
+        assert "btnStartCrop.classList.toggle('hidden', cropState.active || !showCropHint)" not in html
+
 
 class TestUpload:
     def test_no_file(self, client):

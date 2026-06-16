@@ -379,7 +379,7 @@
                 const hasRegions = activeFile.regions && activeFile.regions.length > 0;
                 const showCropHint = activeFile.processed && !hasRegions;
                 cropHint.classList.toggle('hidden', !showCropHint);
-                btnStartCrop.classList.toggle('hidden', cropState.active || !showCropHint);
+                btnStartCrop.classList.toggle('hidden', cropState.active);
 
                 if (activeFile.processed && activeFile.results) {
                     renderAllResults();
