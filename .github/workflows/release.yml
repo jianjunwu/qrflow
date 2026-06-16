@@ -48,13 +48,13 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           set -e
-          MISSING=$(ldd src/qrflow/_libs/libzbar.so.0 | grep 'not found' || true)
+          MISSING=$(LD_LIBRARY_PATH=src/qrflow/_libs ldd src/qrflow/_libs/libzbar.so.0 | grep 'not found' || true)
           if [ -n "$MISSING" ]; then
             echo "ERROR: bundled libzbar has missing dependencies:"
             echo "$MISSING"
             exit 1
           fi
-          echo "All deps resolved — bundled libs are self-contained"
+          echo "All deps resolved from _libs/ — bundled libs are self-contained"
 
       - name: Install build
         run: pip install build

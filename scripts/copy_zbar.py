@@ -98,13 +98,22 @@ def copy_zbar() -> None:
         if not link.exists():
             link.symlink_to("libzbar.so.0")
 
-        # ── copy transitive deps ──────────────────────────────────────────
-        for dep in _ldd(src):
-            dep_dest = LIBS_DIR / dep.name
-            if dep_dest.exists():
-                continue
-            shutil.copy2(dep, dep_dest)
-            print(f"Copied dep {dep} -> {dep_dest}")
+        # ── recursively copy all transitive deps ────────────────────────
+        # BFS: ldd each newly-copied lib, copy its non-system deps, repeat.
+        queue: list[Path] = [dest]
+        bundled: set[str] = {"libzbar.so.0", "libzbar.so"}
+
+        while queue:
+            lib = queue.pop(0)
+            for dep in _ldd(lib):
+                name = dep.name
+                if name in bundled:
+                    continue
+                bundled.add(name)
+                dep_dest = LIBS_DIR / name
+                shutil.copy2(dep, dep_dest)
+                queue.append(dep_dest)
+                print(f"Copied dep {dep} -> {dep_dest}")
 
     else:
         raise RuntimeError(f"Unsupported platform: {sys.platform}")
