@@ -1,4 +1,4 @@
-"""Pipeline concurrency and caching tests."""
+"""Pipeline concurrency, caching, and early-exit tests."""
 
 from __future__ import annotations
 
@@ -6,11 +6,58 @@ import io
 import threading
 from unittest.mock import patch
 
+import cv2
 import numpy as np
 import pytest
 from PIL import Image as PILImage
 
 from qrflow.core.pipeline import Pipeline
+
+
+class TestPipelineEarlyExit:
+    """Verify pipeline skips remaining steps after a region is decoded."""
+
+    @pytest.fixture
+    def pipeline(self):
+        return Pipeline()
+
+    def test_early_exit_after_successful_decode(self, pipeline, qr_image, tmp_path):
+        """Steps after first successful decode should be skipped for a region."""
+        path = tmp_path / "early_exit.png"
+        cv2.imwrite(str(path), qr_image)
+
+        result = pipeline.process(str(path))
+
+        steps = result["steps"]
+        region_indices = set()
+        for s in steps:
+            # step_name format: "区域1·原始图片" or "原始图片"
+            name = s["step_name"]
+            if "·" in name:
+                region_indices.add(name.split("·")[0])
+
+        # All regions should have only steps up to first success (not all 7)
+        # With a clean QR image, raw step should succeed for all regions
+        # Expected: at most one step per region if raw succeeds
+        total_steps = len(steps)
+        num_regions = len(region_indices) if region_indices else 1
+        max_expected = num_regions * 7  # worst case without early exit
+        assert total_steps < max_expected, (
+            f"Early exit should reduce steps: got {total_steps}, "
+            f"expected < {max_expected} (regions × steps)"
+        )
+
+    def test_plain_image_still_runs_all_steps(self, pipeline, plain_image, tmp_path):
+        """When no step succeeds, all steps should still be executed."""
+        path = tmp_path / "plain.png"
+        cv2.imwrite(str(path), plain_image)
+
+        result = pipeline.process(str(path))
+
+        steps = result["steps"]
+        assert len(steps) == 7, (
+            f"Plain image should run all 7 steps, got {len(steps)}"
+        )
 
 
 class TestPipelineCache:

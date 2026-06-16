@@ -62,6 +62,21 @@ class TestWeChatBackend:
         result = backend.recognize(np.ones((100, 100, 3), dtype=np.uint8) * 255)
         assert result is None
 
+    def test_unavailable_logs_at_debug_level(self, caplog):
+        """WeChat QR 不可用时应用 DEBUG 级别记录，不应以 WARNING 级别告警."""
+        import logging
+        from qrflow.core.recognize.wechat_backend import WeChatBackend
+
+        caplog.set_level(logging.DEBUG, logger="qrflow.core.recognize.wechat_backend")
+        WeChatBackend()
+
+        warnings = [r for r in caplog.records if "WeChat QR unavailable" in r.message]
+        if warnings:
+            for r in warnings:
+                assert r.levelno <= logging.INFO, (
+                    f"Expected DEBUG or INFO, got {logging.getLevelName(r.levelno)}"
+                )
+
 
 class TestRecognition:
     def test_qr_code_recognized(self, qr_image):

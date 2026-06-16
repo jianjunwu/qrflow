@@ -281,7 +281,7 @@
             }
             updateUI();
 
-            // Phase 2: Upload + detect all in parallel
+            // Phase 2: Upload all in parallel (no auto-detect — user clicks "开始处理" to trigger)
             await Promise.allSettled(
                 records.map(async (rec) => {
                     const record = uploadedFiles.get(rec.id);
@@ -293,9 +293,6 @@
                         const data = await resp.json();
                         if (data.success) {
                             record.filename = data.filename;
-                            record.status = 'detecting';
-                            updateUI();
-                            await detectRegionsForFile(record);
                             record.status = 'ready';
                         } else {
                             record.status = 'error';
@@ -314,25 +311,6 @@
                 reader.onload = (e) => resolve(e.target.result);
                 reader.readAsDataURL(file);
             });
-        }
-
-        async function detectRegionsForFile(record) {
-            if (!record.filename) return;
-            try {
-                const resp = await fetch('/api/detect', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ filename: record.filename }),
-                });
-                const data = await resp.json();
-                if (data.success && data.qr_regions && data.qr_regions.length > 0) {
-                    record.regions = data.qr_regions;
-                } else {
-                    record.regions = [];
-                }
-            } catch (err) {
-                record.regions = [];
-            }
         }
 
         // ============================================================
@@ -399,8 +377,9 @@
             if (activeFile) {
                 previewImage.src = activeFile.dataUri;
                 const hasRegions = activeFile.regions && activeFile.regions.length > 0;
-                cropHint.classList.toggle('hidden', hasRegions);
-                btnStartCrop.classList.toggle('hidden', cropState.active);
+                const showCropHint = activeFile.processed && !hasRegions;
+                cropHint.classList.toggle('hidden', !showCropHint);
+                btnStartCrop.classList.toggle('hidden', cropState.active || !showCropHint);
 
                 if (activeFile.processed && activeFile.results) {
                     renderAllResults();

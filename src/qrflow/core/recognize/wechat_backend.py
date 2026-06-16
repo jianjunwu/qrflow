@@ -25,7 +25,7 @@ class WeChatBackend(BaseRecognizeBackend):
             self._detector = cv2.wechat_qrcode_WeChatQRCode("", "", "", "")
         except Exception as exc:
             self.available = False
-            logger.warning("WeChat QR unavailable: %s", exc)
+            logger.debug("WeChat QR unavailable: %s", exc)
 
     def recognize(self, image: np.ndarray) -> str | None:
         if not self.available:

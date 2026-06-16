@@ -101,7 +101,10 @@ class Pipeline:
             if qr_regions:
                 for region_idx, region in enumerate(qr_regions):
                     crop = region["crop_array"]
+                    region_decoded = False
                     for step in self._steps:
+                        if region_decoded:
+                            break
                         try:
                             enhanced = step.process(crop)
                         except Exception as exc:
@@ -109,6 +112,8 @@ class Pipeline:
                             enhanced = crop
                         b64 = encode_base64(enhanced)
                         recog = self._recognize(enhanced)
+                        if recog.get("success"):
+                            region_decoded = True
                         step_name = f"区域{region_idx + 1}·{step.label}"
                         total_attempts += len(recog.get("all_results", []))
                         all_steps.append({
@@ -120,13 +125,18 @@ class Pipeline:
                     del region["crop_array"]
             else:
                 current = image
+                global_decoded = False
                 for step in self._steps:
+                    if global_decoded:
+                        break
                     try:
                         current = step.process(current)
                     except Exception as exc:
                         logger.warning("Enhance step '%s' failed: %s", step.name, exc)
                     b64 = encode_base64(current)
                     recog = self._recognize(current)
+                    if recog.get("success"):
+                        global_decoded = True
                     total_attempts += len(recog.get("all_results", []))
                     all_steps.append({
                         "step_key": step.name,
