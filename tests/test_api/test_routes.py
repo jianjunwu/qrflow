@@ -58,6 +58,26 @@ class TestPages:
         # bug 逻辑：按钮在处理前也会被隐藏 —— 不应存在
         assert "btnStartCrop.classList.toggle('hidden', cropState.active || !showCropHint)" not in html
 
+    def test_crop_rects_persist_across_file_switch(self, client):
+        """切换文件时框选状态应保存到旧 record 并从新 record 恢复."""
+        resp = client.get("/")
+        html = resp.text
+
+        # selectFile 应保存旧文件的框选区间
+        assert "oldFile.cropRects = [...cropState.rects]" in html
+        # selectFile 应从新文件恢复框选区间
+        assert "cropState.rects = [...newFile.cropRects]" in html
+        # startCropMode 不应重置 rects 为 []（cancelCropMode 中允许有）
+        start_crop = html.index('function startCropMode()')
+        end = html.index('cropState.startX', start_crop)
+        assert 'cropState.rects = []' not in html[start_crop:end]
+
+    def test_record_has_crop_rects_field(self, client):
+        """新创建的 record 应包含 cropRects 字段."""
+        resp = client.get("/")
+        html = resp.text
+        assert "cropRects" in html
+
 
 class TestUpload:
     def test_no_file(self, client):

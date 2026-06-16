@@ -264,6 +264,7 @@
                         originalName: file.name,
                         dataUri,
                         regions: [],
+                        cropRects: [],
                         results: null,
                         processed: false,
                         status: 'uploading',
@@ -328,8 +329,21 @@
 
         function selectFile(id) {
             if (processing) return;
+            // Save current file's crop rects before switching
+            if (activeFileId && cropState.rects.length > 0) {
+                const oldFile = uploadedFiles.get(activeFileId);
+                if (oldFile) oldFile.cropRects = [...cropState.rects];
+            }
             activeFileId = id;
             cancelCropMode();
+            // Restore new file's crop rects
+            const newFile = uploadedFiles.get(id);
+            if (newFile && newFile.cropRects && newFile.cropRects.length > 0) {
+                cropState.rects = [...newFile.cropRects];
+                cropState.selectedIndex = -1;
+                btnConfirmCrop.classList.remove('hidden');
+                renderAllCropOverlays();
+            }
             clearError();
             updateUI();
         }
@@ -920,7 +934,12 @@
             cropState.dragging = false;
             cropState.resizing = false;
             cropState.selectedIndex = -1;
-            cropState.rects = [];
+            // Restore saved rects from current file (if any)
+            const f = getActiveFile();
+            cropState.rects = f && f.cropRects ? [...f.cropRects] : [];
+            if (cropState.rects.length > 0) {
+                btnConfirmCrop.classList.remove('hidden');
+            }
             cropState.startX = cropState.startY = cropState.endX = cropState.endY = 0;
 
             btnStartCrop.classList.add('hidden');
@@ -938,6 +957,12 @@
         }
 
         function cancelCropMode() {
+            // Save rects before clearing (so user can switch back later)
+            if (cropState.rects.length > 0) {
+                const f = getActiveFile();
+                if (f) f.cropRects = [...cropState.rects];
+            }
+
             cropState.active = false;
             cropState.drawing = false;
             cropState.dragging = false;
@@ -964,6 +989,10 @@
 
         function confirmCrop() {
             if (cropState.rects.length === 0) return;
+
+            // Persist rects to current file's record
+            const f = getActiveFile();
+            if (f) f.cropRects = [...cropState.rects];
 
             cropState.active = false;
             cropState.drawing = false;
