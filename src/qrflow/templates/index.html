@@ -240,6 +240,8 @@
             uploadedFiles.clear();
             activeFileId = null;
             activeResultTabId = null;
+            cropState.rects = [];
+            clearAllCropOverlays();
             updateUI();
         });
 
@@ -340,6 +342,8 @@
             uploadedFiles.delete(id);
             if (activeFileId === id) {
                 activeFileId = uploadedFiles.keys().next().value || null;
+                cropState.rects = [];
+                clearAllCropOverlays();
             }
             updateUI();
         }
@@ -396,7 +400,7 @@
                 previewImage.src = activeFile.dataUri;
                 const hasRegions = activeFile.regions && activeFile.regions.length > 0;
                 cropHint.classList.toggle('hidden', hasRegions);
-                btnStartCrop.classList.toggle('hidden', !hasRegions && !cropState.active);
+                btnStartCrop.classList.toggle('hidden', cropState.active);
 
                 if (activeFile.processed && activeFile.results) {
                     renderAllResults();
@@ -895,6 +899,7 @@
 
         // Preview image zoom
         previewImage.addEventListener('click', () => {
+            if (cropState.active || cropState.rects.length > 0) return;
             const activeFile = getActiveFile();
             if (!activeFile) return;
             lightboxContent.classList.add('preview-zoom');
@@ -962,7 +967,6 @@
             cropState.rects = [];
             cropState.startX = cropState.startY = cropState.endX = cropState.endY = 0;
 
-            btnStartCrop.classList.add('hidden');
             btnProcess.classList.remove('hidden');
             btnManualProcess.classList.add('hidden');
             btnConfirmCrop.classList.add('hidden');
@@ -1359,6 +1363,7 @@
                 abortController = null;
                 btnManualProcess.disabled = false;
                 btnProcess.classList.remove('hidden');
+                cropState.rects = [];
                 updateUI();
             }
         }
