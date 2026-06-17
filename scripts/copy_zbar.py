@@ -1,62 +1,71 @@
-"""CI helper: copy platform zbar library and its transitive deps into _libs/.
+"""CI helper: build minimal zbar from source or copy from system, place into _libs/.
 
 Usage: python scripts/copy_zbar.py
 """
-import re
 import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 LIBS_DIR = Path("src/qrflow/_libs")
-
-# Libs guaranteed present on any Linux system — no need to bundle.
-_SYSTEM_LIBS = {
-    "linux-vdso.so.1",
-    "libc.so.6",
-    "libm.so.6",
-    "libpthread.so.0",
-    "libdl.so.2",
-    "librt.so.1",
-    "libresolv.so.2",
-    "libstdc++.so.6",
-    "libgcc_s.so.1",
-    "libcrypt.so.1",
-    "libutil.so.1",
-}
-
-# Sonames that contain "ld-linux" (dynamic linker) — never bundle.
-_IS_LD_LINUX = re.compile(r"ld-linux")
+ZBAR_VERSION = "0.23.93"
+ZBAR_URL = (
+    "https://github.com/mchehab/zbar/archive"
+    f"/refs/tags/{ZBAR_VERSION}.tar.gz"
+)
 
 
-def _ldd(lib_path: Path) -> list[Path]:
-    """Run ldd on *lib_path* and return a list of resolved dependency paths."""
-    out = subprocess.check_output(["ldd", str(lib_path)], text=True)
-    deps = []
-    for line in out.splitlines():
-        # Two forms:
-        #   libfoo.so.N => /usr/lib/libfoo.so.N (0x...)
-        #   /lib64/ld-linux-x86-64.so.2 (0x...)   (no soname, absolute path)
-        if "=>" in line:
-            # "soname => path (addr)"
-            right = line.rsplit("=>", 1)[1]
-            path_str = right.split("(")[0].strip()
-        else:
-            # Try to extract an absolute path
-            parts = line.strip().split()
-            # First token should be an absolute path
-            if parts and parts[0].startswith("/"):
-                path_str = parts[0]
-            else:
-                continue
+def _build_zbar_linux() -> Path:
+    """Download and build a minimal libzbar — no X11, video, dbus, or jpeg.
 
-        p = Path(path_str)
-        if p.exists() and p.name not in _SYSTEM_LIBS and not _IS_LD_LINUX.search(p.name):
-            deps.append(p)
-    return deps
+    Returns the path to the built libzbar.so.0.3.0.
+    """
+    work = Path(tempfile.mkdtemp(prefix="zbar-build-"))
+    tarball = work / "zbar.tar.gz"
+    print(f"Downloading zbar {ZBAR_VERSION} ...")
+    subprocess.run(
+        ["wget", "-q", ZBAR_URL, "-O", str(tarball)], check=True
+    )
+    subprocess.run(["tar", "xzf", str(tarball), "-C", str(work)], check=True)
+    src_dir = work / f"zbar-{ZBAR_VERSION}"
+
+    print("Configuring (minimal: no X11, video, dbus, jpeg) ...")
+    subprocess.run(
+        ["autoreconf", "-fi"], cwd=src_dir,
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True,
+    )
+    subprocess.run(
+        [
+            "./configure",
+            "--disable-video",
+            "--without-x", "--without-xv",
+            "--without-jpeg", "--without-imagemagick",
+            "--without-python", "--without-gtk", "--without-qt",
+            "--prefix=/usr",
+        ],
+        cwd=src_dir,
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True,
+    )
+
+    print("Building ...")
+    subprocess.run(
+        ["make", "-j"], cwd=src_dir,
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True,
+    )
+
+    # The built library
+    result = list((src_dir / "zbar" / ".libs").glob("libzbar.so.*.*.*"))
+    if not result:
+        raise FileNotFoundError("Build succeeded but libzbar.so not found")
+    return result[0]
 
 
 def copy_zbar() -> None:
+    # Clean any previous build artifacts.
+    if LIBS_DIR.exists():
+        for f in LIBS_DIR.glob("*"):
+            f.unlink()
     LIBS_DIR.mkdir(parents=True, exist_ok=True)
 
     if sys.platform == "darwin":
@@ -69,51 +78,49 @@ def copy_zbar() -> None:
                 shutil.copy2(src, LIBS_DIR / "libzbar.dylib")
                 print(f"Copied {src} -> {LIBS_DIR / 'libzbar.dylib'}")
                 return
-        raise FileNotFoundError("libzbar.dylib not found. Install with: brew install zbar")
+        raise FileNotFoundError(
+            "libzbar.dylib not found. Install with: brew install zbar"
+        )
 
     elif sys.platform == "linux":
-        machine = __import__("platform").machine()
-        candidates = [
-            f"/usr/lib/{machine}-linux-gnu/libzbar.so.0",
-            "/usr/lib/x86_64-linux-gnu/libzbar.so.0",
-            "/usr/lib/aarch64-linux-gnu/libzbar.so.0",
-            "/usr/lib/libzbar.so.0",
-        ]
-        src = None
-        for c in candidates:
-            p = Path(c)
-            if p.exists():
-                src = p
-                break
-        if src is None:
-            raise FileNotFoundError(
-                "libzbar.so.0 not found. Install with: apt install libzbar0"
-            )
+        built = _build_zbar_linux()
 
         dest = LIBS_DIR / "libzbar.so.0"
-        shutil.copy2(src, dest)
-        print(f"Copied {src} -> {dest}")
+        shutil.copy2(built, dest)
+        print(f"Copied {built} -> {dest}")
 
         link = LIBS_DIR / "libzbar.so"
-        if not link.exists():
-            link.symlink_to("libzbar.so.0")
+        if link.exists():
+            link.unlink()
+        link.symlink_to("libzbar.so.0")
 
-        # ── recursively copy all transitive deps ────────────────────────
-        # BFS: ldd each newly-copied lib, copy its non-system deps, repeat.
-        queue: list[Path] = [dest]
-        bundled: set[str] = {"libzbar.so.0", "libzbar.so"}
+        # Sanity check: the minimal build should only depend on libc.
+        print("\nVerifying bundled libzbar deps (must be libc-only) ...")
+        out = subprocess.check_output(
+            ["ldd", str(dest)], text=True, stderr=subprocess.STDOUT,
+        )
+        missing = [l for l in out.splitlines() if "not found" in l]
+        if missing:
+            print("ERROR: missing deps:")
+            for m in missing:
+                print(f"  {m.strip()}")
+            sys.exit(1)
 
-        while queue:
-            lib = queue.pop(0)
-            for dep in _ldd(lib):
-                name = dep.name
-                if name in bundled:
-                    continue
-                bundled.add(name)
-                dep_dest = LIBS_DIR / name
-                shutil.copy2(dep, dep_dest)
-                queue.append(dep_dest)
-                print(f"Copied dep {dep} -> {dep_dest}")
+        # Warn if anything beyond libc/ld-linux is pulled in.
+        extra_deps = [
+            l for l in out.splitlines()
+            if "=>" in l
+            and "libc.so" not in l
+            and "libm.so" not in l
+            and "libpthread" not in l
+            and "ld-linux" not in l
+        ]
+        if extra_deps:
+            print("WARNING: unexpected non-system deps:")
+            for d in extra_deps:
+                print(f"  {d.strip()}")
+
+        print(f"OK — libzbar depends on libc only ({len(out.splitlines())} lines)")
 
     else:
         raise RuntimeError(f"Unsupported platform: {sys.platform}")

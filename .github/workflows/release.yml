@@ -33,28 +33,18 @@ jobs:
         with:
           python-version: "3.10"
 
-      - name: Install zbar (Linux)
+      - name: Install zbar build deps (Linux)
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y libzbar0
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential autoconf automake libtool pkg-config wget gettext autopoint
 
       - name: Install zbar (macOS)
         if: runner.os == 'macOS'
         run: HOMEBREW_NO_AUTO_UPDATE=1 brew install zbar
 
-      - name: Copy zbar libs
+      - name: Copy / build zbar libs
         run: python scripts/copy_zbar.py
-
-      - name: Validate bundled libs have no missing deps
-        if: runner.os == 'Linux'
-        run: |
-          set -e
-          MISSING=$(LD_LIBRARY_PATH=src/qrflow/_libs ldd src/qrflow/_libs/libzbar.so.0 | grep 'not found' || true)
-          if [ -n "$MISSING" ]; then
-            echo "ERROR: bundled libzbar has missing dependencies:"
-            echo "$MISSING"
-            exit 1
-          fi
-          echo "All deps resolved from _libs/ — bundled libs are self-contained"
 
       - name: Install build
         run: pip install build

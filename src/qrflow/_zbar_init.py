@@ -37,8 +37,8 @@ else:
                     ctypes.cdll.LoadLibrary(str(_p))
                     _pending.discard(_p)
                     _progress = True
-                except OSError:
-                    pass
+                except OSError as _e:
+                    print(f"[qrflow] preload skip {_p.name}: {_e}", file=sys.stderr)
             if not _progress:
                 break  # remaining deps have unsatisfied transitive deps
 
